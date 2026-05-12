@@ -149,6 +149,50 @@ const renderers = {
     },
   },
 
+  /* module card — visual surface for a newly-created file */
+  module: {
+    mount: (c) => {
+      const ext = (c.props.filename || "").split(".").pop().toLowerCase();
+      const path = c.props.filename || "(file)";
+      const exports = c.props.exports || [];
+      const lines = c.props.lineCount || 0;
+
+      const sourcePre = el("pre", { class: "module-source", style: "display: none;" }, c.props.source || "");
+      let shown = false;
+
+      const dom = el("div", { class: "component" },
+        header("📦", "module", "new file"),
+        el("div", { class: "module-card" },
+          el("div", { class: `file-icon ${ext}` }, ext.slice(0, 4).toUpperCase() || "FILE"),
+          el("div", { class: "body" },
+            el("div", { class: "path" }, path),
+            el("div", { class: "meta-row" },
+              el("span", null, lines + " lines"),
+              el("span", null, "·"),
+              el("span", null, exports.length + (exports.length === 1 ? " export" : " exports")),
+            ),
+            exports.length
+              ? el("div", { class: "exports" },
+                  ...exports.map(e => el("span", { class: "exp" },
+                    el("span", { class: `kindlet ${e.kind || "section"}` }, kindGlyph(e.kind)),
+                    el("span", null, e.name),
+                  )))
+              : null,
+            el("button", { class: "show-src", onclick: () => {
+              shown = !shown;
+              sourcePre.style.display = shown ? "block" : "none";
+              dom.querySelector(".show-src").textContent = shown ? "▴ Hide source" : "▾ Show source";
+            }}, "▾ Show source"),
+          ),
+        ),
+        sourcePre,
+      );
+      const meta = $(".meta", dom);
+      if (meta) meta.textContent = "+" + lines + " lines";
+      return dom;
+    },
+  },
+
   /* stats grid with optional sparklines */
   stats: {
     mount: (c) => {
@@ -313,6 +357,18 @@ function renderDeploy(dom, c) {
       el("span", { style: "color: var(--fg-dim);" }, "Live at "),
       el("a", { href: c.props.url, target: "_blank", style: "color: var(--accent); font-family: var(--mono);" }, c.props.url),
     ));
+  }
+}
+
+function kindGlyph(kind) {
+  switch (kind) {
+    case "function":  return "ƒ";
+    case "const":     return "•";
+    case "class":     return "◎";
+    case "interface": return "I";
+    case "type":      return "T";
+    case "handler":   return "⚡";
+    default:          return "▸";
   }
 }
 

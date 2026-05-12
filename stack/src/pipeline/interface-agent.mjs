@@ -46,7 +46,33 @@ export function editorialAgentRules(chunk, state) {
       }
     }
 
-    // Rule 2: Edit / Write that doesn't fit a richer type → diff.
+    // Rule 2a: Write of a source file → `module` card (file icon, path,
+    // parsed exports as pills, source collapsed). The Write created a
+    // file; the user cares about its shape, not its raw text.
+    if (ev.kind === "assistant" && ev.tool === "Write") {
+      const i = ev.input || {};
+      const parsed = parseModule(i.file_path, i.content);
+      if (parsed) {
+        out.push({
+          op: "append",
+          component: {
+            id: newId("mod"),
+            type: "module",
+            props: {
+              filename: i.file_path,
+              lineCount: parsed.lineCount,
+              exports: parsed.exports,
+              source: i.content,
+            },
+          },
+          ts: ev.ts,
+        });
+        continue;
+      }
+    }
+
+    // Rule 2b: Edit (changes to existing code) → diff. Plus any Write
+    // that didn't match Rule 2a (binary content, no parseable shape).
     if (ev.kind === "assistant" && (ev.tool === "Edit" || ev.tool === "Write")) {
       const i = ev.input || {};
       const hunks = synthDiffFromEdit(i, ev.tool);
@@ -216,6 +242,92 @@ function parseBuildOutput(text) {
   const timeMatch = text.match(/built in ([\d.]+\s*m?s)/i);
   if (timeMatch) stats.push({ label: "Build time", value: timeMatch[1], tone: "green" });
   return stats;
+}
+
+/**
+ * Parse a newly-written file into a module summary: lineCount + exports.
+ * Returns null when we can't extract anything useful (and the caller
+ * falls back to a diff).
+ */
+function parseModule(filePath, content) {
+  if (!filePath || typeof content !== "string") return null;
+  const lineCount = content.split("\n").length;
+  const ext = (filePath.split(".").pop() || "").toLowerCase();
+  const exports = [];
+
+  // TypeScript / JavaScript: parse `export ...`
+  if (["ts", "tsx", "js", "jsx", "mjs"].includes(ext)) {
+    const patterns = [
+      [/export\s+(?:async\s+)?function\s+(\w+)/g, "function"],
+      [/export\s+default\s+function\s+(\w+)/g, "function"],
+      [/export\s+class\s+(\w+)/g, "class"],
+      [/export\s+interface\s+(\w+)/g, "interface"],
+      [/export\s+type\s+(\w+)/g, "type"],
+      [/export\s+const\s+(\w+)/g, "const"],
+      [/export\s+let\s+(\w+)/g, "const"],
+      [/export\s+\{\s*([^}]+)\s*\}/g, "reexport"],
+    ];
+    for (const [re, kind] of patterns) {
+      for (const m of content.matchAll(re)) {
+        if (kind === "reexport") {
+          for (const name of m[1].split(",")) {
+            const clean = name.trim().split(/\s+as\s+/)[0].trim();
+            if (clean && !exports.find(e => e.name === clean)) exports.push({ name: clean, kind: "const" });
+          }
+        } else {
+          if (!exports.find(e => e.name === m[1])) exports.push({ name: m[1], kind });
+        }
+      }
+    }
+    // Service-worker-style files: top-level event listeners as "handler" pills
+    if (exports.length === 0) {
+      for (const m of content.matchAll(/(?:self|globalThis|window)\.addEventListener\(['"](\w+)['"]/g)) {
+        exports.push({ name: "on:" + m[1], kind: "handler" });
+      }
+    }
+  }
+
+  // YAML: top-level keys
+  if (ext === "yml" || ext === "yaml") {
+    const topKeys = new Set();
+    for (const line of content.split("\n")) {
+      const m = line.match(/^(\w[\w-]*):/);
+      if (m) topKeys.add(m[1]);
+    }
+    // and any `jobs:` subkeys
+    const jobs = [...content.matchAll(/^\s{2}(\w[\w-]*):\s*\n\s{4}/gm)].map(m => m[1]);
+    for (const k of topKeys) exports.push({ name: k, kind: "section" });
+    for (const j of jobs) exports.push({ name: "job: " + j, kind: "section" });
+  }
+
+  // SQL: CREATE TABLE statements
+  if (ext === "sql") {
+    for (const m of content.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi)) {
+      exports.push({ name: m[1], kind: "class" });
+    }
+  }
+
+  // JSON: top-level keys
+  if (ext === "json") {
+    try {
+      const obj = JSON.parse(content);
+      for (const k of Object.keys(obj || {})) exports.push({ name: k, kind: "const" });
+    } catch { /* invalid json */ }
+  }
+
+  // Cap exports for display
+  if (exports.length > 12) {
+    const rest = exports.length - 11;
+    exports.length = 11;
+    exports.push({ name: `… +${rest} more`, kind: "section" });
+  }
+
+  // For unknown file types, only emit if we got something
+  if (exports.length === 0 && !["ts", "tsx", "js", "jsx", "mjs", "yml", "yaml"].includes(ext)) {
+    return null;
+  }
+
+  return { lineCount, exports };
 }
 
 function parseSchema(filePath, content) {

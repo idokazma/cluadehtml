@@ -240,6 +240,64 @@
   .deploy-step .tm { color: var(--fg-mute); font-size: 11px; font-family: var(--mono); }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* module card */
+  .module-card { display: flex; gap: 14px; padding: 12px 14px; align-items: flex-start; }
+  .module-card .file-icon {
+    width: 38px; height: 44px; border-radius: 6px;
+    flex-shrink: 0; display: grid; place-items: center;
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    color: #fff;
+    background: var(--bg-3); border: 1px solid var(--line-2);
+    position: relative;
+  }
+  .module-card .file-icon::after {
+    content: ""; position: absolute; top: -1px; right: -1px;
+    width: 11px; height: 11px;
+    background: var(--bg-2);
+    border-left: 1px solid var(--line-2);
+    border-bottom: 1px solid var(--line-2);
+  }
+  .module-card .file-icon.ts,
+  .module-card .file-icon.tsx { background: #2d4a7a; color: #c5e0ff; border-color: #3a5a8a; }
+  .module-card .file-icon.js,
+  .module-card .file-icon.jsx { background: #6b5a16; color: #f5e7a8; border-color: #7a6a26; }
+  .module-card .file-icon.yml,
+  .module-card .file-icon.yaml { background: #4a2a2a; color: #ffc5c5; border-color: #5a3a3a; }
+  .module-card .file-icon.json { background: #3a4a2a; color: #c5ffaa; border-color: #4a5a3a; }
+  .module-card .file-icon.css  { background: #4a2a4a; color: #f0c5f0; border-color: #5a3a5a; }
+  .module-card .file-icon.sql  { background: #2a4a4a; color: #aaf0f0; border-color: #3a5a5a; }
+  .module-card .file-icon.html { background: #6a4a2a; color: #ffd9aa; border-color: #7a5a3a; }
+  .module-card .body { flex: 1; min-width: 0; }
+  .module-card .path { font-family: var(--mono); font-size: 13px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .module-card .meta-row { display: flex; gap: 10px; margin-top: 3px; font-size: 11.5px; color: var(--fg-mute); }
+  .module-card .exports { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+  .module-card .exp {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px 3px 6px; border-radius: 5px;
+    background: var(--bg-3); border: 1px solid var(--line);
+    font-family: var(--mono); font-size: 11.5px; color: var(--fg);
+  }
+  .module-card .exp:hover { border-color: var(--line-2); }
+  .module-card .exp .kindlet {
+    width: 16px; height: 16px; border-radius: 3px;
+    display: inline-grid; place-items: center;
+    font-size: 10px; font-weight: 700; color: #fff;
+    font-family: var(--sans);
+    flex-shrink: 0;
+  }
+  .module-card .exp .kindlet.function  { background: #6b9fff; }
+  .module-card .exp .kindlet.const     { background: #5fb87a; }
+  .module-card .exp .kindlet.class     { background: #a78bfa; }
+  .module-card .exp .kindlet.interface { background: #d6b14a; }
+  .module-card .exp .kindlet.type      { background: #f06292; }
+  .module-card .exp .kindlet.handler   { background: #e26a6a; }
+  .module-card .exp .kindlet.section   { background: var(--fg-mute); }
+  .module-card .show-src { margin-top: 10px; background: transparent; border: 0; color: var(--fg-mute); cursor: pointer; padding: 0; font-size: 11.5px; }
+  .module-card .show-src:hover { color: var(--fg); }
+  .module-source { margin: 0; padding: 10px 14px; max-height: 280px; overflow-y: auto;
+    background: #08090b; color: #cdd1d8; font-family: var(--mono); font-size: 12px; line-height: 1.5;
+    white-space: pre-wrap; border-top: 1px solid var(--line); }
+
   /* stats cards */
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; padding: 12px; }
   .stat { background: var(--bg-3); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; border: 1px solid transparent; transition: border-color 160ms; }
@@ -622,7 +680,17 @@ function editorialAgentRules(chunk, state) {
         continue;
       }
     }
-    // Edit / Write → diff (fallback)
+    // Write of a source file → module card (file shape, not source)
+    if (ev.kind === "assistant" && ev.tool === "Write") {
+      const i = ev.input || {};
+      const parsed = parseModule(i.file_path, i.content);
+      if (parsed) {
+        out.push({ op: "append", component: { id: newId("mod"), type: "module",
+          props: { filename: i.file_path, lineCount: parsed.lineCount, exports: parsed.exports, source: i.content } }, ts: ev.ts });
+        continue;
+      }
+    }
+    // Edit (or Write that didn't fit a module) → diff
     if (ev.kind === "assistant" && (ev.tool === "Edit" || ev.tool === "Write")) {
       const i = ev.input || {};
       const hunks = synthDiffFromEdit(i, ev.tool);
@@ -753,6 +821,63 @@ function parseBuildOutput(text) {
   if (m2) stats.push({ label: "Build time", value: m2[1], tone: "green" });
   return stats;
 }
+function parseModule(filePath, content) {
+  if (!filePath || typeof content !== "string") return null;
+  const lineCount = content.split("\n").length;
+  const ext = (filePath.split(".").pop() || "").toLowerCase();
+  const exports = [];
+  if (["ts", "tsx", "js", "jsx", "mjs"].includes(ext)) {
+    const patterns = [
+      [/export\s+(?:async\s+)?function\s+(\w+)/g, "function"],
+      [/export\s+default\s+function\s+(\w+)/g, "function"],
+      [/export\s+class\s+(\w+)/g, "class"],
+      [/export\s+interface\s+(\w+)/g, "interface"],
+      [/export\s+type\s+(\w+)/g, "type"],
+      [/export\s+const\s+(\w+)/g, "const"],
+      [/export\s+let\s+(\w+)/g, "const"],
+      [/export\s+\{\s*([^}]+)\s*\}/g, "reexport"],
+    ];
+    for (const [re, kind] of patterns) {
+      for (const m of content.matchAll(re)) {
+        if (kind === "reexport") {
+          for (const name of m[1].split(",")) {
+            const clean = name.trim().split(/\s+as\s+/)[0].trim();
+            if (clean && !exports.find(e => e.name === clean)) exports.push({ name: clean, kind: "const" });
+          }
+        } else {
+          if (!exports.find(e => e.name === m[1])) exports.push({ name: m[1], kind });
+        }
+      }
+    }
+    if (exports.length === 0) {
+      for (const m of content.matchAll(/(?:self|globalThis|window)\.addEventListener\(['"](\w+)['"]/g)) {
+        exports.push({ name: "on:" + m[1], kind: "handler" });
+      }
+    }
+  }
+  if (ext === "yml" || ext === "yaml") {
+    const topKeys = new Set();
+    for (const line of content.split("\n")) {
+      const m = line.match(/^(\w[\w-]*):/);
+      if (m) topKeys.add(m[1]);
+    }
+    const jobs = [...content.matchAll(/^\s{2}(\w[\w-]*):\s*\n\s{4}/gm)].map(m => m[1]);
+    for (const k of topKeys) exports.push({ name: k, kind: "section" });
+    for (const j of jobs) exports.push({ name: "job: " + j, kind: "section" });
+  }
+  if (ext === "sql") {
+    for (const m of content.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)/gi)) {
+      exports.push({ name: m[1], kind: "class" });
+    }
+  }
+  if (ext === "json") {
+    try { for (const k of Object.keys(JSON.parse(content) || {})) exports.push({ name: k, kind: "const" }); } catch {}
+  }
+  if (exports.length > 12) { const rest = exports.length - 11; exports.length = 11; exports.push({ name: `… +${rest} more`, kind: "section" }); }
+  if (exports.length === 0 && !["ts", "tsx", "js", "jsx", "mjs", "yml", "yaml"].includes(ext)) return null;
+  return { lineCount, exports };
+}
+
 function parseSchema(filePath, content) {
   if (!filePath || !content) return null;
   if (!/(schema|db)\.(ts|js|sql)$/.test(filePath) && !/migrations\//.test(filePath)) return null;
@@ -988,7 +1113,56 @@ const renderers = {
     },
     update: (dom, c) => renderStatsGrid(dom, c),
   },
+  module: {
+    mount: (c) => {
+      const ext = (c.props.filename || "").split(".").pop().toLowerCase();
+      const path = c.props.filename || "(file)";
+      const exports = c.props.exports || [];
+      const lines = c.props.lineCount || 0;
+      const sourcePre = el("pre", { class: "module-source", style: "display: none;" }, c.props.source || "");
+      let shown = false;
+      const dom = el("div", { class: "component" },
+        header("📦", "module", "new file", "+" + lines + " lines"),
+        el("div", { class: "module-card" },
+          el("div", { class: `file-icon ${ext}` }, ext.slice(0, 4).toUpperCase() || "FILE"),
+          el("div", { class: "body" },
+            el("div", { class: "path" }, path),
+            el("div", { class: "meta-row" },
+              el("span", null, lines + " lines"),
+              el("span", null, "·"),
+              el("span", null, exports.length + (exports.length === 1 ? " export" : " exports")),
+            ),
+            exports.length
+              ? el("div", { class: "exports" }, ...exports.map(e =>
+                  el("span", { class: "exp" },
+                    el("span", { class: `kindlet ${e.kind || "section"}` }, kindGlyph(e.kind)),
+                    el("span", null, e.name),
+                  )))
+              : null,
+            el("button", { class: "show-src", onclick: () => {
+              shown = !shown;
+              sourcePre.style.display = shown ? "block" : "none";
+              dom.querySelector(".show-src").textContent = shown ? "▴ Hide source" : "▾ Show source";
+            }}, "▾ Show source"),
+          ),
+        ),
+        sourcePre,
+      );
+      return dom;
+    },
+  },
 };
+function kindGlyph(k) {
+  switch (k) {
+    case "function":  return "ƒ";
+    case "const":     return "•";
+    case "class":     return "◎";
+    case "interface": return "I";
+    case "type":      return "T";
+    case "handler":   return "⚡";
+    default:          return "▸";
+  }
+}
 
 /* helper renderers for the new component types */
 function renderTests(dom, c) {

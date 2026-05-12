@@ -68,11 +68,32 @@ A checkable todo list. Props: `{ title, items: [{ label, done, active }] }`.
 USE when: the agent is laying out or updating its plan of work.
 DO NOT USE: for ad-hoc 2-item lists; those are notes.
 
-### `diff`
-A unified diff against a file. Props: `{ filename, hunks: [{ startLine, lines: [[ "+"|"-"|" ", text ]] }] }`.
+### `module`
+A visual card for a *newly created* file: file-type icon, path, parsed
+public exports as pills (function/const/class/interface/type/handler),
+and the source collapsed behind a toggle. Props: `{ filename, lineCount,
+exports: [{ name, kind }], source }`.
 
-USE when: the agent committed a code change.
+USE when: a `Write` created a source file (`.ts/.tsx/.js/.jsx/.mjs/
+.yml/.yaml/.json/.sql/.css/.html`) and we could parse at least one
+export or top-level section. This *replaces* the diff for the
+common-case of creating a new file — the user wants to know *what shape*
+the file has (its public API), not to read its source line by line.
+DO NOT USE: for SQL migrations with `CREATE TABLE` *that represent the
+data model* — those go to `schema`. DO NOT USE for binary files or
+content we can't parse.
+
+### `diff`
+A unified diff against a file. Props: `{ filename, hunks: [{ startLine,
+lines: [[ "+"|"-"|" ", text ]] }] }`.
+
+USE when: an `Edit` changed an existing file. The user wants to see
+*what* changed, not what now exists — so the diff is the right surface.
+USE also when a Write produced something we couldn't parse into a
+`module`.
 DO NOT USE: for code being shown for review (use `code` for that).
+DO NOT USE: for new-file Writes that fit a `module` or `schema` — those
+are richer.
 
 ### `code`
 A syntax-highlighted snippet, with copy / edit-and-reprompt actions.
@@ -273,6 +294,17 @@ Input event: a Write whose `content` contains two `export interface`
 blocks. You return a `schema` component listing both entities and their
 fields; the diff is skipped because the *shape* is the surface, not the
 source.
+
+**Example G — Write of `src/components/HabitCard.tsx` (route to `module`, not `diff`).**
+Input event: a Write of a React component file. You return a `module`
+card with the file icon (`tsx`), the path, and a single export pill
+(`ƒ HabitCard`). Source is kept in `props.source` for click-to-expand
+but is not the primary surface.
+
+**Example H — Edit of `src/hooks/useHabit.ts` (the bug-fix, route to `diff`).**
+Input event: an Edit with `old_string` / `new_string`. You return a
+`diff` because the *change* is the surface — the user wants to see
+what shifted.
 
 **Example F — vercel deploy (route to `deploy`, not `terminal`).**
 Input event: `{ tool: "Bash", input: { command: "npx vercel deploy --prod" } }`.

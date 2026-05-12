@@ -25,15 +25,67 @@ test("Edit tool_use commits a diff with old/new hunks", () => {
   assert.equal(lines[lines.length - 1][0], "+");
 });
 
-test("Write tool_use commits a diff with all-additions", () => {
+test("Write of a source file produces a `module` card with parsed exports (not a diff)", () => {
   const ev = {
     kind: "assistant", tool: "Write", tool_use_id: "tu_w",
     input: { file_path: "src/new.ts", content: "export const x = 1;\nexport const y = 2;" },
     ts: 1,
   };
   const out = editorialAgentRules([ev], {});
+  assert.equal(out[0].component.type, "module");
+  assert.equal(out[0].component.props.filename, "src/new.ts");
+  assert.equal(out[0].component.props.lineCount, 2);
+  assert.deepEqual(out[0].component.props.exports, [
+    { name: "x", kind: "const" },
+    { name: "y", kind: "const" },
+  ]);
+  // source is preserved for click-to-expand
+  assert.match(out[0].component.props.source, /export const x = 1/);
+  // and no diff is also emitted
+  assert.equal(out.filter(m => m.component?.type === "diff").length, 0);
+});
+
+test("Write of a .tsx component file produces a `module` card", () => {
+  const ev = {
+    kind: "assistant", tool: "Write", tool_use_id: "tu_w",
+    input: {
+      file_path: "src/components/HabitCard.tsx",
+      content: "export function HabitCard() { return null; }\nexport interface HabitCardProps { habitId: string }",
+    },
+    ts: 1,
+  };
+  const out = editorialAgentRules([ev], {});
+  assert.equal(out[0].component.type, "module");
+  const exports = out[0].component.props.exports;
+  assert.ok(exports.find(e => e.name === "HabitCard" && e.kind === "function"));
+  assert.ok(exports.find(e => e.name === "HabitCardProps" && e.kind === "interface"));
+});
+
+test("Write of a YAML file produces a module with section pills", () => {
+  const ev = {
+    kind: "assistant", tool: "Write", tool_use_id: "tu_w",
+    input: {
+      file_path: ".github/workflows/ci.yml",
+      content: "name: ci\non:\n  push:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest\n  deploy:\n    runs-on: ubuntu-latest",
+    },
+    ts: 1,
+  };
+  const out = editorialAgentRules([ev], {});
+  assert.equal(out[0].component.type, "module");
+  const exports = out[0].component.props.exports;
+  // Should pick up at least name, on, jobs as top-level sections
+  assert.ok(exports.some(e => e.name === "name"));
+  assert.ok(exports.some(e => e.name === "jobs"));
+});
+
+test("Edit (not Write) still produces a diff — we want to see what changed in existing code", () => {
+  const ev = {
+    kind: "assistant", tool: "Edit", tool_use_id: "tu_e",
+    input: { file_path: "src/x.ts", old_string: "const a = 1;", new_string: "const a = 2;" },
+    ts: 1,
+  };
+  const out = editorialAgentRules([ev], {});
   assert.equal(out[0].component.type, "diff");
-  assert.deepEqual(out[0].component.props.hunks[0].lines.map(l => l[0]), ["+", "+"]);
 });
 
 test("text offering numbered options + a question becomes a decision card", () => {
@@ -185,15 +237,20 @@ test("Write of a *schema.ts file with multiple `interface` blocks → `schema` d
   assert.equal(out.filter(m => m.component?.type === "diff").length, 0, "should NOT also commit a diff");
 });
 
-test("Write of a *.tsx component file still produces a diff (schema rule only matches schema/db files)", () => {
+test("Schema rule wins over module rule for schema files", () => {
   const ev = {
     kind: "assistant", tool: "Write", tool_use_id: "tu_w",
-    input: { file_path: "src/components/HabitCard.tsx", content: "export function HabitCard() { return null; }" },
+    input: {
+      file_path: "src/db/schema.ts",
+      content: "export interface A { id: string }\nexport interface B { id: string }",
+    },
     ts: 1,
   };
   const out = editorialAgentRules([ev], {});
-  assert.ok(out.find(m => m.component?.type === "diff"));
-  assert.equal(out.filter(m => m.component?.type === "schema").length, 0);
+  // schema rule takes precedence
+  assert.ok(out.find(m => m.component?.type === "schema"));
+  assert.equal(out.filter(m => m.component?.type === "module").length, 0);
+  assert.equal(out.filter(m => m.component?.type === "diff").length, 0);
 });
 
 test("a short summary-feeling note IS kept", () => {
