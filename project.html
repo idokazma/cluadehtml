@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Claude Code — checkout-svc</title>
+<title>habits/ — Claude Code</title>
 <style>
   :root {
     --bg: #0e0f12;
@@ -29,126 +29,334 @@
   body {
     background: var(--bg); color: var(--fg);
     font-family: var(--sans); font-size: 14px;
-    overflow-x: hidden;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh; overflow: hidden;
   }
 
-  /* top bar */
+  /* header */
   header {
-    position: sticky; top: 0; z-index: 10;
     border-bottom: 1px solid var(--line);
+    padding: 10px 20px;
+    display: flex; align-items: center; gap: 12px;
     background: var(--bg-2);
-    padding: 10px 24px;
-    display: flex; align-items: center; gap: 14px;
   }
   .logo { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; }
-  .crumb { color: var(--fg-dim); font-size: 13px; }
-  .crumb b { color: var(--fg); font-weight: 600; }
+  .title { font-weight: 600; }
+  .crumb { color: var(--fg-dim); font-size: 12px; }
+  .crumb b { color: var(--fg); }
   .spacer { flex: 1; }
   .pill { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--bg-3); color: var(--fg-dim); border: 1px solid var(--line); }
   .pill.green { color: var(--green); border-color: #2c4a36; background: #16241c; }
   .pill.red   { color: var(--red);   border-color: #4a2c2c; background: #241616; }
-
-  /* layout */
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
-
-  /* hero */
-  .hero { grid-column: 1 / -1; display: flex; gap: 16px; align-items: flex-start; }
-  .hero-icon { width: 56px; height: 56px; border-radius: 12px; background: linear-gradient(135deg, var(--accent), #b85a3e); display: grid; place-items: center; font-size: 26px; color: #fff; flex-shrink: 0; }
-  .hero h1 { margin: 0 0 4px; font-size: 22px; }
-  .hero .desc { color: var(--fg-dim); line-height: 1.5; max-width: 720px; }
-  .hero .stack { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-  .stack .tag { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 4px; background: var(--bg-3); color: var(--fg-dim); }
-
-  /* section */
-  section { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
-  .sec-head { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.06em; }
-  .sec-head .name { color: var(--fg); font-weight: 600; letter-spacing: 0; text-transform: none; font-size: 13px; }
-  .sec-head .count { margin-left: auto; color: var(--fg-mute); font-size: 11px; }
-  .sec-body { padding: 6px; }
-
-  /* card list */
-  .card {
-    display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; align-items: center;
-    padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: 80ms;
+  .pill.live::before {
+    content: ""; display: inline-block; width: 6px; height: 6px;
+    background: var(--green); border-radius: 50%; margin-right: 6px;
+    animation: pulse 1.6s infinite;
   }
-  .card:hover { background: var(--bg-3); }
-  .card .ico { width: 28px; height: 28px; border-radius: 6px; background: var(--bg-3); display: grid; place-items: center; font-size: 14px; }
-  .card .ico.g { background: #16241c; color: var(--green); }
-  .card .ico.r { background: #241616; color: var(--red); }
-  .card .ico.y { background: #241f12; color: var(--yellow); }
-  .card .ico.b { background: #14223a; color: var(--blue); }
-  .card .ico.p { background: #1f1a2e; color: var(--purple); }
-  .card .title { font-weight: 500; color: var(--fg); }
-  .card .sub { color: var(--fg-dim); font-size: 12.5px; margin-top: 2px; }
-  .card .meta { color: var(--fg-mute); font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
-  .card .cta { font-size: 12px; color: var(--accent); opacity: 0; transition: 80ms; }
-  .card:hover .cta { opacity: 1; }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 #5fb87a88; }
+    70%  { box-shadow: 0 0 0 8px #5fb87a00; }
+    100% { box-shadow: 0 0 0 0 #5fb87a00; }
+  }
 
-  /* recent sessions */
-  .session-card { display: grid; grid-template-columns: 6px 1fr auto; gap: 12px; align-items: stretch; padding: 0; cursor: pointer; }
+  main { overflow-y: auto; padding: 24px 20px 60px; scroll-behavior: smooth; }
+  .stream { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+  /* day divider */
+  .day-divider {
+    margin: 18px 0 4px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 14px;
+    animation: day-in 520ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes day-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .day-divider::before, .day-divider::after {
+    content: ""; height: 1px; background: linear-gradient(to right, transparent, var(--line));
+  }
+  .day-divider::after { background: linear-gradient(to left, transparent, var(--line)); }
+  .day-pill {
+    background: var(--bg-2);
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    padding: 6px 14px;
+    display: inline-flex; align-items: center; gap: 10px;
+    font-size: 12px;
+  }
+  .day-pill .num {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--accent); background: var(--accent-soft);
+    padding: 1px 6px; border-radius: 4px;
+  }
+  .day-pill .date { color: var(--fg-dim); }
+  .day-pill .label { font-weight: 600; }
+
+  /* hero (the project description card) */
+  .hero {
+    display: flex; gap: 18px; align-items: flex-start;
+    padding: 6px 4px 4px;
+    animation: hero-in 600ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes hero-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .hero-icon {
+    width: 64px; height: 64px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--accent), #b85a3e);
+    display: grid; place-items: center;
+    font-size: 30px; color: #fff; flex-shrink: 0;
+    box-shadow: 0 6px 20px #d9775744;
+  }
+  .hero h1 { margin: 0 0 4px; font-size: 22px; }
+  .hero .desc { color: var(--fg-dim); line-height: 1.5; max-width: 720px; font-size: 13.5px; }
+  .hero .stack { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+  .hero .stack .tag {
+    font-family: var(--mono); font-size: 10.5px;
+    padding: 2px 7px; border-radius: 4px;
+    background: var(--bg-3); color: var(--fg-dim);
+    border: 1px solid var(--line);
+  }
+
+  /* component (same style as session view) */
+  .component {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+    animation: component-in 520ms cubic-bezier(.2,.8,.2,1) both;
+    will-change: transform, opacity;
+  }
+  .component:hover { border-color: var(--line-2); }
+  .component.referenced {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  @keyframes component-in {
+    0%   { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(2px); }
+    60%  { opacity: 1; filter: blur(0); }
+    100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  }
+  .c-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(to bottom, var(--bg-3), var(--bg-2));
+    font-size: 12px; color: var(--fg-dim);
+  }
+  .c-head .icon { font-size: 14px; }
+  .c-head .kind {
+    font-family: var(--mono); font-size: 10.5px; padding: 1px 6px;
+    border-radius: 3px; background: var(--bg-4); color: var(--fg-dim);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .c-head .name { color: var(--fg); font-weight: 500; }
+  .c-head .meta { margin-left: auto; color: var(--fg-mute); font-size: 11px; font-family: var(--mono); }
+
+  /* cascade utility */
+  .cascade > * { opacity: 0; transform: translateY(4px); animation: cascade-in 380ms cubic-bezier(.2,.8,.2,1) forwards; }
+  .cascade > *:nth-child(1)  { animation-delay:  60ms; }
+  .cascade > *:nth-child(2)  { animation-delay: 110ms; }
+  .cascade > *:nth-child(3)  { animation-delay: 160ms; }
+  .cascade > *:nth-child(4)  { animation-delay: 210ms; }
+  .cascade > *:nth-child(5)  { animation-delay: 260ms; }
+  .cascade > *:nth-child(6)  { animation-delay: 310ms; }
+  .cascade > *:nth-child(7)  { animation-delay: 360ms; }
+  .cascade > *:nth-child(8)  { animation-delay: 410ms; }
+  .cascade > *:nth-child(n+9) { animation-delay: 460ms; }
+  @keyframes cascade-in { to { opacity: 1; transform: translateY(0); } }
+
+  /* session card (an inline replay of a past session — clickable to "open it") */
+  .session-card {
+    display: grid;
+    grid-template-columns: 6px 1fr auto;
+    cursor: pointer;
+    transition: background 160ms ease;
+  }
   .session-card:hover { background: var(--bg-3); }
   .session-card .stripe { background: var(--green); }
   .session-card.fail .stripe { background: var(--red); }
-  .session-card.run  .stripe { background: var(--blue); }
-  .session-card .body { padding: 10px 0; }
-  .session-card .pad  { padding: 10px 12px 10px 0; text-align: right; color: var(--fg-mute); font-size: 11px; }
+  .session-card.wip  .stripe { background: var(--yellow); }
+  .session-card .body { padding: 10px 14px; }
   .session-card .title { font-weight: 500; }
   .session-card .summary { color: var(--fg-dim); font-size: 12.5px; margin-top: 3px; line-height: 1.45; }
-  .session-card .tags { margin-top: 6px; display: flex; gap: 5px; }
-  .session-card .tags .t { font-size: 10.5px; padding: 1px 6px; border-radius: 3px; background: var(--bg-4); color: var(--fg-dim); font-family: var(--mono); }
+  .session-card .chips { margin-top: 6px; display: flex; gap: 5px; flex-wrap: wrap; }
+  .session-card .chip { font-size: 10.5px; padding: 1px 6px; border-radius: 3px; background: var(--bg-3); color: var(--fg-dim); font-family: var(--mono); }
+  .session-card .chip.accent { background: var(--accent-soft); color: var(--accent); }
+  .session-card .pad { padding: 10px 14px 10px 0; text-align: right; color: var(--fg-mute); font-size: 11px; align-self: center; }
 
-  /* right rail */
-  .rail section { margin-bottom: 16px; }
-  .health { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px; }
-  .health .box { background: var(--bg-3); border-radius: 6px; padding: 8px 10px; }
-  .health .label { color: var(--fg-mute); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-  .health .value { font-size: 18px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .health .value.green { color: var(--green); }
-  .health .value.red   { color: var(--red); }
-  .health .value.yellow { color: var(--yellow); }
+  /* needs-attention row */
+  .row-item {
+    display: grid; grid-template-columns: 30px 1fr auto;
+    gap: 12px; align-items: center;
+    padding: 10px 14px; cursor: pointer;
+    transition: background 160ms ease, transform 160ms ease;
+  }
+  .row-item:hover { background: var(--bg-3); }
+  .row-item:hover .cta { opacity: 1; transform: translateX(0); }
+  .row-item .ico {
+    width: 28px; height: 28px; border-radius: 7px;
+    display: grid; place-items: center; font-size: 13px;
+    background: var(--bg-3);
+  }
+  .row-item .ico.r { background: #241616; color: var(--red); }
+  .row-item .ico.y { background: #241f12; color: var(--yellow); }
+  .row-item .ico.b { background: #14223a; color: var(--blue); }
+  .row-item .ico.g { background: #16241c; color: var(--green); }
+  .row-item .ico.p { background: #1f1a2e; color: var(--purple); }
+  .row-item .title { font-weight: 500; }
+  .row-item .sub { color: var(--fg-dim); font-size: 12.5px; margin-top: 2px; }
+  .row-item .sub code { font-family: var(--mono); color: var(--fg); background: var(--bg-3); padding: 0 4px; border-radius: 3px; font-size: 11.5px; }
+  .row-item .cta { color: var(--accent); font-size: 12px; opacity: 0; transform: translateX(-4px); transition: 160ms; }
+
+  /* health stats */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; padding: 12px; }
+  .stat {
+    background: var(--bg-3); border-radius: 8px; padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 4px;
+    transition: border-color 160ms; border: 1px solid transparent;
+  }
+  .stat:hover { border-color: var(--line-2); }
+  .stat .lbl { font-size: 10.5px; color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat .val { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .val.green { color: var(--green); }
+  .stat .val.red { color: var(--red); }
+  .stat .val.yellow { color: var(--yellow); }
+  .stat svg { display: block; width: 100%; height: 30px; }
+  .stat svg path.line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+  .stat svg path.area { fill: var(--accent-soft); }
+  .stat svg circle.dot { fill: var(--accent); }
+  .stat .delta { font-size: 11px; color: var(--green); }
+  .stat .delta.down { color: var(--red); }
 
   /* concept map */
-  .concept { padding: 8px; }
+  .concept { padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
   .concept .area {
     display: flex; align-items: center; gap: 10px;
-    padding: 7px 10px; border-radius: 6px; cursor: pointer;
+    padding: 6px 10px; border-radius: 6px; cursor: pointer;
+    transition: 120ms;
   }
-  .concept .area:hover { background: var(--bg-3); }
+  .concept .area:hover { background: var(--bg-3); transform: translateX(2px); }
   .concept .area .blob { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
   .concept .area .name { font-family: var(--mono); font-size: 12.5px; }
-  .concept .area .path { color: var(--fg-mute); font-size: 11px; font-family: var(--mono); margin-left: auto; }
+  .concept .area .desc { color: var(--fg-mute); font-size: 11.5px; margin-left: auto; }
   .concept .you {
-    margin-top: 6px; padding: 8px 10px; border-radius: 6px;
+    margin-top: 6px; padding: 8px 12px; border-radius: 6px;
     border: 1px dashed var(--accent); background: var(--accent-soft);
-    font-size: 12px; color: var(--fg);
+    font-size: 12px;
   }
 
-  /* chat shelf */
-  .chat-shelf {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    border-top: 1px solid var(--line); background: var(--bg-2);
-    padding: 12px 24px;
+  /* questions / open decisions */
+  .question-card {
+    display: grid; grid-template-columns: 14px 1fr;
+    gap: 10px; padding: 10px 14px; cursor: pointer;
+    transition: background 160ms;
   }
-  .chat-wrap { max-width: 1180px; margin: 0 auto; display: flex; gap: 10px; }
-  .chat-wrap .placeholder {
+  .question-card:hover { background: var(--bg-3); }
+  .question-card .marker {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--yellow); margin-top: 6px;
+    box-shadow: 0 0 0 3px #d6b14a22;
+  }
+  .question-card.resolved .marker { background: var(--green); box-shadow: 0 0 0 3px #5fb87a22; }
+  .question-card .q { font-weight: 500; font-size: 13.5px; }
+  .question-card .a { color: var(--fg-dim); font-size: 12.5px; margin-top: 2px; }
+  .question-card .meta { color: var(--fg-mute); font-size: 11px; margin-top: 4px; }
+
+  /* schema svg */
+  .schema { padding: 0; }
+  .schema svg { width: 100%; height: 240px; display: block; }
+  .schema rect.entity { fill: var(--bg-3); stroke: var(--line-2); stroke-width: 1; cursor: pointer; transition: stroke 160ms; }
+  .schema rect.entity:hover { stroke: var(--accent); }
+  .schema text.title { font-family: var(--sans); font-size: 11px; font-weight: 600; fill: var(--accent); }
+  .schema text.field { font-family: var(--mono); font-size: 10px; fill: var(--fg-dim); }
+  .schema line.rel { stroke: var(--fg-mute); stroke-width: 1; stroke-dasharray: 3 3; }
+
+  /* welcome banner */
+  .banner {
+    background: linear-gradient(135deg, var(--accent-soft), transparent 60%);
+    border: 1px solid #4a3024;
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 14px; align-items: center;
+    animation: hero-in 600ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  .banner .what { font-size: 13.5px; color: var(--fg); line-height: 1.5; }
+  .banner .what b { color: var(--fg); }
+  .banner .what .delta { color: var(--accent); font-weight: 600; }
+  .banner .resume {
+    background: var(--accent); color: #fff; border: 0;
+    padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    font-weight: 600; font-size: 13px;
+    box-shadow: 0 4px 12px #d9775744;
+  }
+  .banner .resume:hover { filter: brightness(1.05); }
+
+  /* composer */
+  .input-bar {
+    border-top: 1px solid var(--line);
+    background: var(--bg-2);
+    padding: 12px 20px 14px;
+  }
+  .input-wrap {
+    max-width: 920px; margin: 0 auto;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .quick-bar { display: flex; gap: 6px; }
+  .quick-bar button {
+    background: var(--bg-3); border: 1px solid var(--line);
+    color: var(--fg); padding: 6px 12px; border-radius: 8px;
+    font-size: 12.5px; cursor: pointer;
+  }
+  .quick-bar button:hover { border-color: var(--accent); color: var(--accent); }
+  .composer-area {
     flex: 1; background: var(--bg-3); border: 1px solid var(--line-2);
-    border-radius: 10px; padding: 10px 14px; color: var(--fg-dim); cursor: text;
+    border-radius: 10px; padding: 8px 12px;
+    display: flex; align-items: center; gap: 8px;
   }
-  .chat-wrap .placeholder:hover { border-color: var(--accent); }
-  .quick {
-    display: flex; gap: 6px; align-items: center;
+  .composer-area:focus-within { border-color: var(--accent); }
+  .composer-area textarea {
+    flex: 1; background: transparent; border: 0; outline: 0; resize: none;
+    color: var(--fg); font-family: var(--sans); font-size: 14px;
+    min-height: 22px; max-height: 140px;
   }
-  .quick button {
-    background: var(--bg-3); border: 1px solid var(--line); color: var(--fg);
-    padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  .composer-area .send-btn {
+    background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+    padding: 5px 12px; font-weight: 600; cursor: pointer;
   }
-  .quick button:hover { border-color: var(--accent); }
 
-  body { padding-bottom: 90px; }
+  /* context menu */
+  .ctx-menu {
+    position: fixed; z-index: 1000;
+    background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 8px;
+    padding: 4px; min-width: 240px;
+    box-shadow: 0 12px 30px #0009;
+    font-size: 13px;
+  }
+  .ctx-menu button {
+    width: 100%; text-align: left; background: none; border: 0; color: var(--fg);
+    padding: 7px 10px; border-radius: 5px; cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .ctx-menu button:hover { background: var(--bg-3); }
+  .ctx-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
 
-  /* responsive */
-  @media (max-width: 900px) {
-    .wrap { grid-template-columns: 1fr; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 1ms !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 </style>
 </head>
@@ -156,255 +364,432 @@
 
 <header>
   <div class="logo">C</div>
-  <div class="crumb"><b>checkout-svc</b> &middot; main &middot; <span style="color: var(--fg-mute)">/home/ido/code/checkout-svc</span></div>
+  <div>
+    <div class="title">claude code</div>
+    <div class="crumb"><b>habits/</b> · main · <span style="color: var(--fg-mute);">~/code/habits</span></div>
+  </div>
   <div class="spacer"></div>
   <span class="pill green">CI green</span>
   <span class="pill">claude-opus-4-7</span>
+  <span class="pill live">live</span>
 </header>
 
-<div class="wrap">
+<main id="main"><div class="stream" id="stream"></div></main>
 
-  <!-- hero -->
-  <div class="hero">
-    <div class="hero-icon">$</div>
-    <div>
-      <h1>checkout-svc</h1>
-      <div class="desc">
-        Backend service that handles cart checkout and payments for the storefront. HTTP API in front of Stripe and the orders database. Owned by the payments team. Deployed to <code style="font-family: var(--mono); color: var(--fg-dim)">prod-eu-1</code> and <code style="font-family: var(--mono); color: var(--fg-dim)">prod-us-1</code>.
-      </div>
-      <div class="stack">
-        <span class="tag">TypeScript</span>
-        <span class="tag">Node 20</span>
-        <span class="tag">Fastify</span>
-        <span class="tag">Postgres</span>
-        <span class="tag">Stripe SDK</span>
-        <span class="tag">vitest</span>
-        <span class="tag">Docker</span>
-      </div>
+<div class="input-bar">
+  <div class="input-wrap">
+    <div class="composer-area">
+      <textarea id="composer" placeholder="Ask about this project, or click a card above to resume a session…" rows="1"></textarea>
+      <button class="send-btn" id="send">Ask</button>
     </div>
-  </div>
-
-  <!-- LEFT COLUMN -->
-  <div>
-
-    <!-- where you left off -->
-    <section>
-      <div class="sec-head">
-        <span class="name">Where you left off</span>
-        <span class="count">3 recent sessions</span>
-      </div>
-      <div class="sec-body">
-
-        <div class="session-card fail" onclick="alert('would resume the session in a session view')">
-          <div class="stripe"></div>
-          <div class="body">
-            <div class="title">Add idempotency keys to /charge</div>
-            <div class="summary">
-              Migration applied, handler updated, 3/4 tests passing.
-              Open question about how to handle a duplicate key with a different amount.
-            </div>
-            <div class="tags">
-              <span class="t">src/payments/charge.ts</span>
-              <span class="t">+migration 0042</span>
-              <span class="t">1 question open</span>
-            </div>
-          </div>
-          <div class="pad">yesterday<br/>17:42</div>
-        </div>
-
-        <div class="session-card" onclick="alert('would resume the session in a session view')">
-          <div class="stripe"></div>
-          <div class="body">
-            <div class="title">Audit retry logic in http client</div>
-            <div class="summary">Found 3 places that retry without backoff. Wrote a shared <code style="font-family: var(--mono); color: var(--fg-dim)">retry()</code> helper in <code style="font-family: var(--mono); color: var(--fg-dim)">src/http/client.ts</code> and migrated 2 of them.</div>
-            <div class="tags">
-              <span class="t">2 files</span>
-              <span class="t">merged</span>
-            </div>
-          </div>
-          <div class="pad">3 days ago</div>
-        </div>
-
-        <div class="session-card" onclick="alert('would resume the session in a session view')">
-          <div class="stripe"></div>
-          <div class="body">
-            <div class="title">Bump fastify 4 → 5</div>
-            <div class="summary">Upgraded, fixed 4 type errors from the new request-context API, all tests green.</div>
-            <div class="tags">
-              <span class="t">package.json</span>
-              <span class="t">merged</span>
-            </div>
-          </div>
-          <div class="pad">last week</div>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- in flight -->
-    <section>
-      <div class="sec-head">
-        <span class="name">In flight</span>
-        <span class="count">2 branches, 1 PR</span>
-      </div>
-      <div class="sec-body">
-        <div class="card" onclick="alert('would open the branch')">
-          <div class="ico p">⎇</div>
-          <div>
-            <div class="title">claude/idempotency-keys</div>
-            <div class="sub">3 commits ahead of main &middot; 4 files changed &middot; uncommitted: <code style="font-family: var(--mono)">src/payments/charge.test.ts</code></div>
-          </div>
-          <div class="meta">your branch</div>
-        </div>
-        <div class="card" onclick="alert('would open the branch')">
-          <div class="ico p">⎇</div>
-          <div>
-            <div class="title">refactor/extract-pricing</div>
-            <div class="sub">stale &middot; last touched 12 days ago by sam</div>
-          </div>
-          <div class="meta">teammate</div>
-        </div>
-        <div class="card" onclick="alert('would open the PR')">
-          <div class="ico b">⇆</div>
-          <div>
-            <div class="title">PR #482 — Move webhook handler to its own route</div>
-            <div class="sub">2 review comments unaddressed &middot; CI green</div>
-          </div>
-          <div class="meta">opened 2d ago</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- needs attention -->
-    <section>
-      <div class="sec-head">
-        <span class="name">Needs attention</span>
-        <span class="count">4 items</span>
-      </div>
-      <div class="sec-body">
-        <div class="card" onclick="alert('would start a session focused on this')">
-          <div class="ico r">!</div>
-          <div>
-            <div class="title">1 test failing on <code style="font-family: var(--mono)">claude/idempotency-keys</code></div>
-            <div class="sub"><code style="font-family: var(--mono)">charge › different amount, same key</code> — likely needs your call on conflict behavior</div>
-          </div>
-          <div class="cta">start session →</div>
-        </div>
-        <div class="card" onclick="alert('would start a session focused on this')">
-          <div class="ico y">⚠</div>
-          <div>
-            <div class="title">2 dependencies have known CVEs</div>
-            <div class="sub"><code style="font-family: var(--mono)">undici@5.22.0</code>, <code style="font-family: var(--mono)">tar@6.1.11</code> — both have fixed versions available</div>
-          </div>
-          <div class="cta">start session →</div>
-        </div>
-        <div class="card" onclick="alert('would start a session focused on this')">
-          <div class="ico y">⚠</div>
-          <div>
-            <div class="title">PR #482 has unaddressed review comments</div>
-            <div class="sub">danny asked about the retry behavior; jess flagged a missing test</div>
-          </div>
-          <div class="cta">start session →</div>
-        </div>
-        <div class="card" onclick="alert('would start a session focused on this')">
-          <div class="ico b">i</div>
-          <div>
-            <div class="title">Test suite hasn't been run locally in 3 days</div>
-            <div class="sub">last run: monday &middot; main has moved 14 commits since</div>
-          </div>
-          <div class="cta">run now →</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- suggested -->
-    <section>
-      <div class="sec-head">
-        <span class="name">Suggested next moves</span>
-        <span class="count">based on recent activity</span>
-      </div>
-      <div class="sec-body">
-        <div class="card" onclick="alert('would start a session')">
-          <div class="ico g">▶</div>
-          <div>
-            <div class="title">Finish the idempotency keys session</div>
-            <div class="sub">Pick a behavior for duplicate-key conflicts and ship it</div>
-          </div>
-          <div class="cta">resume →</div>
-        </div>
-        <div class="card" onclick="alert('would start a session')">
-          <div class="ico g">▶</div>
-          <div>
-            <div class="title">Migrate the third retry call site</div>
-            <div class="sub">Continues the work from the 3-day-old session in <code style="font-family: var(--mono)">src/webhooks/inbound.ts</code></div>
-          </div>
-          <div class="cta">start →</div>
-        </div>
-        <div class="card" onclick="alert('would start a session')">
-          <div class="ico g">▶</div>
-          <div>
-            <div class="title">Document the new charge flow</div>
-            <div class="sub"><code style="font-family: var(--mono)">docs/payments.md</code> hasn't been updated since the change landed</div>
-          </div>
-          <div class="cta">start →</div>
-        </div>
-      </div>
-    </section>
-
-  </div>
-
-  <!-- RIGHT RAIL -->
-  <aside class="rail">
-
-    <section>
-      <div class="sec-head"><span class="name">Health</span></div>
-      <div class="health">
-        <div class="box"><div class="label">CI</div><div class="value green">passing</div></div>
-        <div class="box"><div class="label">Tests</div><div class="value green">142 / 142</div></div>
-        <div class="box"><div class="label">Coverage</div><div class="value yellow">71%</div></div>
-        <div class="box"><div class="label">CVEs</div><div class="value red">2</div></div>
-        <div class="box"><div class="label">Type errors</div><div class="value green">0</div></div>
-        <div class="box"><div class="label">TODOs</div><div class="value">17</div></div>
-      </div>
-    </section>
-
-    <section>
-      <div class="sec-head"><span class="name">Concept map</span></div>
-      <div class="concept">
-        <div class="area"><span class="blob" style="background: var(--accent)"></span><span class="name">payments</span><span class="path">src/payments/</span></div>
-        <div class="area"><span class="blob" style="background: var(--blue)"></span><span class="name">cart</span><span class="path">src/cart/</span></div>
-        <div class="area"><span class="blob" style="background: var(--green)"></span><span class="name">webhooks</span><span class="path">src/webhooks/</span></div>
-        <div class="area"><span class="blob" style="background: var(--purple)"></span><span class="name">http client</span><span class="path">src/http/</span></div>
-        <div class="area"><span class="blob" style="background: var(--yellow)"></span><span class="name">db / migrations</span><span class="path">migrations/</span></div>
-        <div class="area"><span class="blob" style="background: var(--fg-mute)"></span><span class="name">infra</span><span class="path">deploy/</span></div>
-        <div class="you">
-          You'll probably want to touch <b>payments</b> next — that's where the open session, the failing test, and the open PR all live.
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <div class="sec-head"><span class="name">How to run it</span></div>
-      <div class="sec-body">
-        <div class="card"><div class="ico b">▶</div><div><div class="title">npm run dev</div><div class="sub">starts on :3000 with hot reload</div></div></div>
-        <div class="card"><div class="ico b">✓</div><div><div class="title">npm test</div><div class="sub">vitest, ~8s</div></div></div>
-        <div class="card"><div class="ico b">⌘</div><div><div class="title">docker compose up db</div><div class="sub">postgres + redis for local dev</div></div></div>
-      </div>
-    </section>
-
-  </aside>
-</div>
-
-<!-- chat shelf -->
-<div class="chat-shelf">
-  <div class="chat-wrap">
-    <div class="placeholder" onclick="alert('would open the composer')">Ask claude about this project, or click a card above to start a session…</div>
-    <div class="quick">
-      <button onclick="alert('would start a session')">Resume last session</button>
-      <button onclick="alert('would start a session')">Run tests</button>
+    <div class="quick-bar">
+      <button>Resume yesterday</button>
+      <button>Run tests</button>
     </div>
   </div>
 </div>
 
+<div class="ctx-menu" id="ctx-menu" style="display:none"></div>
+
+<script>
+const $  = (sel, el=document) => el.querySelector(sel);
+const $$ = (sel, el=document) => [...el.querySelectorAll(sel)];
+const el = (tag, attrs={}, ...children) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") n.className = v;
+    else if (k === "html") n.innerHTML = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) n.setAttribute(k, v);
+  }
+  for (const c of children.flat()) {
+    if (c == null || c === false) continue;
+    n.append(c.nodeType ? c : document.createTextNode(c));
+  }
+  return n;
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+const blocks = new Map();
+let nextId = 1;
+const newId = (p="c") => `${p}-${nextId++}`;
+function register(id, kind, dom, data={}) {
+  blocks.set(id, { id, kind, dom, data });
+  dom.dataset.blockId = id;
+  dom.addEventListener("contextmenu", openCtx);
+  return id;
+}
+function append(node) { $("#stream").append(node); }
+
+function header(icon, kind, name, meta) {
+  return el("div", { class: "c-head" },
+    el("span", { class: "icon" }, icon),
+    el("span", { class: "kind" }, kind),
+    el("span", { class: "name" }, name),
+    el("span", { class: "meta" }, meta || "")
+  );
+}
+
+/* ============ components for the project view ============ */
+
+function renderHero() {
+  const node = el("div", { class: "hero" },
+    el("div", { class: "hero-icon" }, "🔥"),
+    el("div", { style: "flex: 1;" },
+      el("h1", null, "habits/"),
+      el("div", { class: "desc" }, "A habit-tracker web app — daily check-ins, streaks (with grace-day and manual freezes), push notifications, theme picker. Built solo with claude over the last 3 days. Live at ", el("code", { style: "font-family: var(--mono); color: var(--accent);" }, "habits.app"), "."),
+      el("div", { class: "stack" },
+        el("span", { class: "tag" }, "TypeScript"),
+        el("span", { class: "tag" }, "React 18"),
+        el("span", { class: "tag" }, "Vite"),
+        el("span", { class: "tag" }, "Dexie / IndexedDB"),
+        el("span", { class: "tag" }, "vitest"),
+        el("span", { class: "tag" }, "Vercel"),
+        el("span", { class: "tag" }, "Web Push"),
+      )
+    )
+  );
+  append(node);
+}
+
+function renderBanner() {
+  const node = el("div", { class: "banner" },
+    el("div", { class: "what" },
+      el("b", null, "Welcome back."),
+      " Since you were last here (yesterday, 18:02): ",
+      el("span", { class: "delta" }, "11 commits, +1.2k lines, 1 deploy, 1 open question"),
+      ". Streak feature is live; analytics events are flowing in. There's ", el("b", null, "1 thing"), " that still wants your attention."
+    ),
+    el("button", { class: "resume" }, "Resume yesterday →")
+  );
+  append(node);
+}
+
+/* ----- session card ----- */
+function renderSessions(name, sessions) {
+  const id = newId("ses");
+  const list = el("div", { class: "cascade" });
+  sessions.forEach(s => {
+    list.append(el("div", { class: "session-card " + (s.status || ""),
+      onclick: () => alert(`Would open session: ${s.title}`) },
+      el("div", { class: "stripe" }),
+      el("div", { class: "body" },
+        el("div", { class: "title" }, s.title),
+        el("div", { class: "summary" }, s.summary),
+        el("div", { class: "chips" }, ...s.chips.map(c => el("span", { class: "chip" + (c.accent ? " accent" : "") }, c.text || c))),
+      ),
+      el("div", { class: "pad" }, s.when),
+    ));
+  });
+  const node = el("div", { class: "component" },
+    header("💬", "sessions", name, sessions.length + " sessions"),
+    list
+  );
+  append(node);
+  register(id, "sessions", node, { sessions });
+  return id;
+}
+
+/* ----- in-flight / needs attention ----- */
+function renderRowList(icon, kind, name, items) {
+  const id = newId(kind);
+  const list = el("div", { class: "cascade" });
+  items.forEach(it => {
+    list.append(el("div", { class: "row-item",
+      onclick: () => alert(`Would: ${it.title}`) },
+      el("div", { class: "ico " + (it.tone || "b") }, it.glyph || "•"),
+      el("div", null,
+        el("div", { class: "title" }, it.title),
+        el("div", { class: "sub", html: it.sub })
+      ),
+      el("div", { class: "cta" }, it.cta || "open →"),
+    ));
+  });
+  const node = el("div", { class: "component" },
+    header(icon, kind, name, items.length + " items"),
+    list
+  );
+  append(node);
+  register(id, kind, node, { items });
+  return id;
+}
+
+/* ----- stat dashboard ----- */
+function renderStats(name, stats) {
+  const id = newId("stat");
+  const grid = el("div", { class: "stat-grid cascade" });
+  stats.forEach(s => {
+    const data = s.spark || [];
+    const w = 100, h = 30;
+    const max = Math.max(...data, 1), min = Math.min(...data, 0);
+    const pts = data.map((v, i) => {
+      const x = (i / Math.max(data.length - 1, 1)) * w;
+      const y = h - ((v - min) / Math.max(max - min, 1)) * (h - 4) - 2;
+      return [x, y];
+    });
+    const lp = pts.map((p, i) => (i ? "L" : "M") + p[0] + "," + p[1]).join(" ");
+    const ap = lp + ` L${w},${h} L0,${h} Z`;
+    const lx = pts[pts.length - 1]?.[0] || 0, ly = pts[pts.length - 1]?.[1] || 0;
+    const svg = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path class="area" d="${ap}"/><path class="line" d="${lp}"/><circle class="dot" cx="${lx}" cy="${ly}" r="2.5"/></svg>`;
+    grid.append(el("div", { class: "stat" },
+      el("div", { class: "lbl" }, s.label),
+      el("div", { class: "val " + (s.tone || "") }, s.value),
+      s.delta ? el("div", { class: "delta " + (s.delta.startsWith("-") ? "down" : "") }, s.delta) : null,
+      s.spark ? el("div", { html: svg }) : null,
+    ));
+  });
+  const node = el("div", { class: "component" },
+    header("📊", "health", name, stats.length + " metrics"),
+    grid
+  );
+  append(node);
+  register(id, "stats", node, { stats });
+  return id;
+}
+
+/* ----- concept map ----- */
+function renderConcept(name, areas, hint) {
+  const id = newId("map");
+  const list = el("div", { class: "concept cascade" });
+  areas.forEach(a => {
+    list.append(el("div", { class: "area",
+      onclick: () => alert(`Would scope claude to: ${a.name}`) },
+      el("span", { class: "blob", style: `background: ${a.color};` }),
+      el("span", { class: "name" }, a.name),
+      el("span", { class: "desc" }, a.desc),
+    ));
+  });
+  if (hint) list.append(el("div", { class: "you", html: hint }));
+  const node = el("div", { class: "component" },
+    header("🗺", "map", name, areas.length + " areas"),
+    list
+  );
+  append(node);
+  register(id, "map", node, { areas });
+  return id;
+}
+
+/* ----- open decisions ----- */
+function renderDecisions(name, items) {
+  const id = newId("dec");
+  const list = el("div", { class: "cascade" });
+  items.forEach(it => {
+    list.append(el("div", { class: "question-card " + (it.resolved ? "resolved" : ""),
+      onclick: () => alert(`Would open the decision: ${it.q}`) },
+      el("div", { class: "marker" }),
+      el("div", null,
+        el("div", { class: "q" }, it.q),
+        el("div", { class: "a" }, it.a),
+        el("div", { class: "meta" }, it.meta),
+      )
+    ));
+  });
+  const node = el("div", { class: "component" },
+    header("?", "decisions", name, items.length),
+    list
+  );
+  append(node);
+  register(id, "decisions", node, { items });
+  return id;
+}
+
+/* ----- schema (project-level data overview) ----- */
+function renderSchema(name) {
+  const id = newId("sch");
+  const svg = `
+    <svg viewBox="0 0 560 240" xmlns="http://www.w3.org/2000/svg">
+      <line class="rel" x1="160" y1="60" x2="290" y2="60" />
+      <line class="rel" x1="160" y1="180" x2="290" y2="60" />
+      <line class="rel" x1="160" y1="180" x2="290" y2="180" />
+      <g><rect class="entity" x="20" y="30" width="140" height="70" rx="6"/><text class="title" x="32" y="50">User</text><text class="field" x="32" y="68">id, email</text><text class="field" x="32" y="82">created_at</text></g>
+      <g><rect class="entity" x="290" y="30" width="150" height="70" rx="6"/><text class="title" x="302" y="50">Habit</text><text class="field" x="302" y="68">id, user_id (fk)</text><text class="field" x="302" y="82">name, frequency</text></g>
+      <g><rect class="entity" x="20" y="150" width="140" height="70" rx="6"/><text class="title" x="32" y="170">CheckIn</text><text class="field" x="32" y="188">id, habit_id (fk)</text><text class="field" x="32" y="202">date, frozen</text></g>
+      <g><rect class="entity" x="290" y="150" width="150" height="70" rx="6"/><text class="title" x="302" y="170">Subscription</text><text class="field" x="302" y="188">id, user_id (fk)</text><text class="field" x="302" y="202">endpoint, hour</text></g>
+    </svg>`;
+  const node = el("div", { class: "component schema" },
+    header("🗂", "schema", name, "4 tables"),
+    el("div", { html: svg })
+  );
+  append(node);
+  register(id, "schema", node, {});
+  return id;
+}
+
+/* ----- day divider ----- */
+function renderDay(num, date, label) {
+  append(el("div", { class: "day-divider" },
+    el("div"),
+    el("div", { class: "day-pill" },
+      el("span", { class: "num" }, "Day " + num),
+      el("span", { class: "date" }, date),
+      el("span", { class: "label" }, "· " + label)
+    ),
+    el("div"),
+  ));
+}
+
+/* ============ context menu ============ */
+let menuTarget = null;
+function openCtx(ev) {
+  ev.preventDefault(); ev.stopPropagation();
+  const b = blocks.get(ev.currentTarget.dataset.blockId);
+  if (!b) return;
+  menuTarget = b;
+  const m = $("#ctx-menu");
+  m.innerHTML = "";
+  [
+    { label: "Ask claude about this",  run: () => focusAsk(b) },
+    { label: "Resume the related session", run: () => alert("Would resume session") },
+    "-",
+    { label: "Pin to top",             run: () => alert("Pinned (mock)") },
+    { label: "Hide from this view",    run: () => b.dom.style.display = "none" },
+  ].forEach(it => {
+    if (it === "-") { m.append(el("hr")); return; }
+    m.append(el("button", { onclick: () => { it.run(); closeCtx(); } }, it.label));
+  });
+  m.style.display = "block";
+  m.style.left = Math.min(ev.clientX, window.innerWidth - 260) + "px";
+  m.style.top  = Math.min(ev.clientY, window.innerHeight - m.offsetHeight - 10) + "px";
+}
+function closeCtx() { $("#ctx-menu").style.display = "none"; }
+document.addEventListener("click", closeCtx);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeCtx(); });
+function focusAsk(b) {
+  b.dom.classList.add("referenced");
+  b.dom.scrollIntoView({ behavior: "smooth", block: "center" });
+  setTimeout(() => b.dom.classList.remove("referenced"), 2200);
+  const c = $("#composer");
+  c.value = `@${b.id} `;
+  c.focus();
+}
+
+/* composer */
+$("#send").addEventListener("click", () => {
+  const v = $("#composer").value.trim();
+  if (!v) return;
+  alert("Would start a new session with: " + v);
+});
+$("#composer").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#send").click(); }
+});
+
+/* =================================================
+   build the page — sequenced so components animate in
+   ================================================= */
+async function build() {
+
+  renderHero();
+  await sleep(200);
+  renderBanner();
+  await sleep(250);
+
+  renderStats("Project health", [
+    { label: "CI",            value: "passing", tone: "green" },
+    { label: "Tests",         value: "11 / 11", tone: "green" },
+    { label: "Coverage",      value: "78%", tone: "yellow", delta: "+7%" },
+    { label: "Bundle size",   value: "82 kB", delta: "-4 kB",  spark: [120, 118, 112, 102, 96, 90, 86, 82] },
+    { label: "DAU",           value: "247",   delta: "+38",    spark: [0, 12, 28, 60, 110, 178, 220, 247] },
+    { label: "Commits / day", value: "5.7",   delta: "+1.2",   spark: [3, 4, 6, 5, 7, 6, 8, 5] },
+  ]);
+
+  await sleep(250);
+
+  renderConcept("Concept map", [
+    { name: "components/",    color: "#d97757", desc: "UI: HabitCard, Streak, ThemePicker…" },
+    { name: "hooks/",         color: "#82aaff", desc: "useHabit, useTheme — state + persistence" },
+    { name: "db/ + Dexie",    color: "#ffcb6b", desc: "IndexedDB tables, queries, migrations" },
+    { name: "notifications/", color: "#a78bfa", desc: "Web push, service worker, schedule" },
+    { name: "analytics/",     color: "#5fb87a", desc: "Event tracking, dashboards" },
+    { name: ".github/",       color: "#f06292", desc: "CI + deploy workflow" },
+  ], `You touched <b>hooks/</b> and <b>components/</b> most recently. The freeze bug from <b>Day 2</b> still has analytics implications worth checking.`);
+
+  await sleep(250);
+
+  renderRowList("⚠", "attention", "Needs your attention", [
+    { tone: "y", glyph: "?",  title: "1 open decision",
+      sub: "Should reminder push notifications batch by hour to save battery, or send individually?",
+      cta: "decide →" },
+    { tone: "b", glyph: "i",  title: "Bundle size grew 12 kB on the analytics commit",
+      sub: "Mostly from <code>posthog-js</code>. Could tree-shake or self-host the small subset you use.", cta: "investigate →" },
+    { tone: "g", glyph: "✓",  title: "Production is healthy",
+      sub: "No errors in the last 24h, p95 latency 84 ms, push delivery rate 98.2%.", cta: "open dashboard →" },
+  ]);
+
+  await sleep(250);
+
+  renderRowList("⎇", "inflight", "In flight", [
+    { tone: "p", glyph: "⎇",  title: "claude/weekly-digest",
+      sub: "2 commits ahead of main · summary email of last week's habit check-ins", cta: "resume →" },
+    { tone: "b", glyph: "⇆",  title: "PR #14 — Migrate from Dexie to native IndexedDB API",
+      sub: "draft · 6 files changed · waiting on benchmark numbers", cta: "open →" },
+    { tone: "y", glyph: "📝", title: "Drafted but unfiled: streak-freeze announcement post",
+      sub: "<code>docs/blog/streak-freeze.md</code> — last touched yesterday", cta: "open →" },
+  ]);
+
+  /* ============ DAY 3 ============ */
+  await sleep(250);
+  renderDay(3, "Wed, Mar 5", "Ship");
+  await sleep(200);
+  renderSessions("Today", [
+    { status: "",    title: "Ship habits.app — full deploy",
+      summary: "Full test suite green, 7-step deploy completed, prod URL live. Analytics wired up post-deploy.",
+      chips: [{text:"+migration 0003"},{text:"deploy"},{text:"+analytics", accent: true},{text:"merged"}],
+      when: "16:42" },
+    { status: "",    title: "Add web-push notifications",
+      summary: "VAPID keys generated, service worker registered, subscriptionsapi added. Server schedule via /api/reminders.",
+      chips: [{text:"src/notifications.ts"},{text:"+sw.js"},{text:"+migration 0003"}],
+      when: "13:08" },
+    { status: "",    title: "Fix the manual-freeze test (carryover from yesterday)",
+      summary: "Added allowFreeze prop to HabitCard; test passes; failing case from yesterday closed.",
+      chips: [{text:"src/components/HabitCard.tsx"},{text:"1 test fixed"}],
+      when: "10:14" },
+  ]);
+
+  /* ============ DAY 2 ============ */
+  await sleep(250);
+  renderDay(2, "Tue, Mar 4", "Iteration");
+  await sleep(200);
+  renderSessions("Yesterday", [
+    { status: "wip",  title: "Streak-freeze + grace day logic",
+      summary: "Fixed a bug where streaks reset on a 1-day gap. Added both an automatic grace day and a manual freeze (2/month).",
+      chips: [{text:"src/hooks/useHabit.ts"},{text:"+migration 0002"},{text:"5 tests, 1 failing"}],
+      when: "14:04" },
+    { status: "",    title: "Theme picker — live color + mode tuning",
+      summary: "Built a playground component with live preview, accent swatches, and light/dark/auto mode. Wired to CSS variables.",
+      chips: [{text:"src/components/ThemePicker.tsx"},{text:"+hooks/useTheme.ts"},{text:"merged"}],
+      when: "16:22" },
+    { status: "",    title: "Decision: how should streaks handle skipped days?",
+      summary: "Picked: both auto-grace AND manual freeze (option 3 of 3). Logged here so future-you knows why.",
+      chips: [{text:"decision", accent: true}],
+      when: "11:48" },
+  ]);
+
+  /* ============ DAY 1 ============ */
+  await sleep(250);
+  renderDay(1, "Mon, Mar 3", "Foundation");
+  await sleep(200);
+  renderSessions("Two days ago", [
+    { status: "", title: "Initial scaffolding — habits/",
+      summary: "Picked IndexedDB over localStorage. Sketched 3 home-screen directions (chose streak-hero). Designed schema. First HabitCard component + streak counter playground.",
+      chips: [{text:"7 files added"},{text:"+migration 0001"},{text:"streak-hero chosen", accent: true}],
+      when: "17:48" },
+  ]);
+
+  await sleep(250);
+
+  renderDecisions("Decision log", [
+    { resolved: true,  q: "Which storage layer?",                   a: "IndexedDB (via Dexie) — beats localStorage on capacity & queryability, beats SQLite-wasm on bundle size.",   meta: "Mon, Mar 3 · resolved" },
+    { resolved: true,  q: "Which home-screen direction?",           a: "Streak-hero (option 3 of 3). Calendar grid is bookmarked for a v2 toggle.",                                  meta: "Mon, Mar 3 · resolved" },
+    { resolved: true,  q: "How should skipped days affect streaks?", a: "Both: 1 auto grace-day per week + 2 manual freezes per month.",                                              meta: "Tue, Mar 4 · resolved" },
+    { resolved: false, q: "Batch push notifications by hour?",      a: "Open — pros: battery, cleaner UX. Cons: less precise timing. Need to check Web Push spec for stale-while-pending.", meta: "Wed, Mar 5 · 1h ago" },
+  ]);
+
+  await sleep(250);
+
+  renderSchema("Data model");
+}
+
+build();
+</script>
 </body>
 </html>

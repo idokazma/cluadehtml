@@ -550,6 +550,192 @@
   .turn-divider::before, .turn-divider::after {
     content: ""; flex: 1; height: 1px; background: var(--line);
   }
+
+  /* day divider — big sticky-ish marker for each working day */
+  .day-divider {
+    margin: 22px 0 6px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 14px;
+    animation: day-in 520ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes day-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .day-divider::before, .day-divider::after {
+    content: ""; height: 1px; background: linear-gradient(to right, transparent, var(--line), var(--line));
+  }
+  .day-divider::after { background: linear-gradient(to left, transparent, var(--line), var(--line)); }
+  .day-pill {
+    background: var(--bg-2);
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    padding: 6px 14px;
+    display: inline-flex; align-items: center; gap: 10px;
+    font-size: 12px;
+    color: var(--fg);
+  }
+  .day-pill .num {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--accent); background: var(--accent-soft);
+    padding: 1px 6px; border-radius: 4px;
+  }
+  .day-pill .date { color: var(--fg-dim); }
+  .day-pill .label { font-weight: 600; }
+  .day-pill .sum { color: var(--fg-mute); font-size: 11px; }
+
+  /* ------- theme picker playground ------- */
+  .theme-play {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 4px;
+  }
+  .theme-preview {
+    border-radius: 8px; padding: 16px; min-height: 180px;
+    background: var(--th-bg, #fff); color: var(--th-fg, #111);
+    border: 1px solid var(--line);
+    transition: background 280ms ease, color 280ms ease;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .theme-preview .pv-title { font-weight: 700; font-size: 14px; }
+  .theme-preview .pv-card {
+    background: var(--th-card, #f5f5f5); border-radius: 6px; padding: 10px 12px;
+    transition: background 280ms ease;
+  }
+  .theme-preview .pv-streak {
+    color: var(--th-accent, #d97757); font-weight: 700; font-size: 22px;
+    transition: color 280ms ease;
+  }
+  .theme-preview .pv-btn {
+    align-self: flex-start;
+    background: var(--th-accent, #d97757); color: var(--th-on-accent, #fff);
+    padding: 6px 12px; border-radius: 5px; font-size: 12px;
+    transition: background 280ms ease;
+  }
+  .theme-controls { display: flex; flex-direction: column; gap: 12px; }
+  .theme-controls .row { display: flex; align-items: center; gap: 8px; }
+  .theme-controls .row label { font-size: 12px; color: var(--fg-dim); flex: 1; }
+  .swatches { display: flex; gap: 4px; flex-wrap: wrap; }
+  .swatch {
+    width: 22px; height: 22px; border-radius: 6px; cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 160ms ease, border-color 160ms ease;
+  }
+  .swatch:hover { transform: scale(1.1); }
+  .swatch.active { border-color: var(--fg); transform: scale(1.1); }
+  .theme-mode {
+    display: flex; gap: 4px; background: var(--bg-3); border-radius: 6px; padding: 3px;
+  }
+  .theme-mode button {
+    flex: 1; background: transparent; border: 0; color: var(--fg-dim);
+    padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;
+    transition: 160ms;
+  }
+  .theme-mode button.active { background: var(--bg); color: var(--fg); }
+
+  /* ------- sparkline / stat ------- */
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 4px; }
+  .stat {
+    background: var(--bg-3); border-radius: 8px; padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 4px;
+    transition: border-color 160ms; border: 1px solid transparent;
+  }
+  .stat:hover { border-color: var(--line-2); }
+  .stat .lbl { font-size: 10.5px; color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat .val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .delta { font-size: 11px; color: var(--green); }
+  .stat .delta.down { color: var(--red); }
+  .stat svg { display: block; width: 100%; height: 36px; }
+  .stat svg path.line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+  .stat svg path.area { fill: var(--accent-soft); }
+  .stat svg circle.dot { fill: var(--accent); }
+
+  /* ------- search results ------- */
+  .grep { font-family: var(--mono); font-size: 12.5px; padding: 4px 0; }
+  .grep .hit {
+    display: flex; gap: 10px; padding: 4px 12px; cursor: pointer;
+    transition: background 160ms;
+  }
+  .grep .hit:hover { background: var(--bg-3); }
+  .grep .hit .path { color: var(--blue); flex-shrink: 0; }
+  .grep .hit .ln { color: var(--fg-mute); }
+  .grep .hit .snip { color: var(--fg-dim); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grep .hit .snip mark { background: #4a3a14; color: #f0d484; padding: 0 2px; border-radius: 2px; }
+
+  /* ------- decision card ------- */
+  .decision {
+    border-color: #4a3a26;
+    background: linear-gradient(to bottom, #2a1f12, var(--bg-2));
+  }
+  .decision .c-head { background: #2a1f12; border-color: #4a3a26; color: #e8c997; }
+  .decision .opts { display: flex; flex-direction: column; gap: 6px; }
+  .decision .opt {
+    padding: 9px 12px; border: 1px solid var(--line-2); border-radius: 7px;
+    cursor: pointer; transition: 160ms;
+  }
+  .decision .opt:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateX(2px); }
+  .decision .opt.picked {
+    border-color: var(--green); background: #16241c;
+    cursor: default;
+  }
+  .decision .opt.picked::after {
+    content: "✓ picked"; float: right; color: var(--green); font-size: 11px; font-weight: 600;
+  }
+  .decision .opt-label { font-weight: 500; }
+  .decision .opt-desc { color: var(--fg-dim); font-size: 12px; margin-top: 2px; }
+
+  /* ------- commit list ------- */
+  .commits { display: flex; flex-direction: column; padding: 4px 0; }
+  .commit {
+    display: grid; grid-template-columns: 14px 70px 1fr auto;
+    align-items: center; gap: 10px;
+    padding: 7px 12px;
+    font-family: var(--mono); font-size: 12.5px;
+    transition: background 160ms;
+    cursor: pointer;
+  }
+  .commit:hover { background: var(--bg-3); }
+  .commit .node {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+    justify-self: center;
+  }
+  .commit .hash { color: var(--fg-mute); font-size: 11.5px; }
+  .commit .msg { color: var(--fg); font-family: var(--sans); font-size: 13px; }
+  .commit .info { color: var(--fg-mute); font-size: 11px; }
+  .commits-rail {
+    position: relative;
+  }
+  .commits-rail::before {
+    content: ""; position: absolute;
+    left: 16px; top: 12px; bottom: 12px; width: 1px;
+    background: var(--line-2);
+  }
+
+  /* ------- deploy / progress steps ------- */
+  .deploy { padding: 4px 0; }
+  .deploy-step {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px; font-size: 13px;
+    color: var(--fg-dim);
+    transition: color 200ms;
+  }
+  .deploy-step.done   { color: var(--fg); }
+  .deploy-step.run    { color: var(--fg); }
+  .deploy-step.fail   { color: var(--red); }
+  .deploy-step .ico {
+    width: 18px; height: 18px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--bg-3); border: 1px solid var(--line-2);
+    font-size: 11px; color: var(--fg-mute);
+    transition: 200ms;
+  }
+  .deploy-step.done .ico { background: var(--green); border-color: var(--green); color: #fff; }
+  .deploy-step.run  .ico { background: var(--blue);  border-color: var(--blue);  color: #fff; }
+  .deploy-step.fail .ico { background: var(--red);   border-color: var(--red);   color: #fff; }
+  .deploy-step.run  .ico > span { animation: spin 900ms linear infinite; }
+  .deploy-step .name { flex: 1; }
+  .deploy-step .meta { color: var(--fg-mute); font-size: 11px; font-family: var(--mono); }
 </style>
 </head>
 <body>
@@ -1116,6 +1302,257 @@ function finishTests(id) {
   $(".meta", b.dom).textContent = failed ? `${failed} failed` : "all passed";
 }
 
+/* -- day divider -- */
+function renderDay(num, date, label, summary) {
+  const node = el("div", { class: "day-divider" },
+    el("div"),
+    el("div", { class: "day-pill" },
+      el("span", { class: "num" }, "Day " + num),
+      el("span", { class: "date" }, date),
+      el("span", { class: "label" }, "· " + label),
+      summary ? el("span", { class: "sum" }, "· " + summary) : null,
+    ),
+    el("div"),
+  );
+  $("#stream").append(node);
+  currentTurn = null;  // day dividers reset the current turn
+  scrollSoon();
+}
+
+/* -- theme picker playground -- */
+function renderTheme(name) {
+  const id = newId("thm");
+  const state = { accent: "#d97757", mode: "light" };
+  const palettes = ["#d97757", "#6b9fff", "#5fb87a", "#a78bfa", "#f06292", "#ffcb6b"];
+  const modes = {
+    light: { bg: "#fffaf7", fg: "#2a1f12", card: "#f5ece3", onAccent: "#fff" },
+    dark:  { bg: "#1a1410", fg: "#f5ece3", card: "#2a1f12", onAccent: "#fff" },
+    auto:  { bg: "#1a1410", fg: "#f5ece3", card: "#2a1f12", onAccent: "#fff" },
+  };
+
+  const preview = el("div", { class: "theme-preview" },
+    el("div", { class: "pv-title" }, "Drink water"),
+    el("div", { class: "pv-card" },
+      el("div", { class: "pv-streak" }, "12 day streak 🔥"),
+      el("div", { style: "font-size: 11px; opacity: 0.7;" }, "Last checked in today"),
+    ),
+    el("button", { class: "pv-btn" }, "I did it today"),
+  );
+
+  function paint() {
+    const m = modes[state.mode];
+    preview.style.setProperty("--th-bg", m.bg);
+    preview.style.setProperty("--th-fg", m.fg);
+    preview.style.setProperty("--th-card", m.card);
+    preview.style.setProperty("--th-accent", state.accent);
+    preview.style.setProperty("--th-on-accent", m.onAccent);
+  }
+
+  const swatches = el("div", { class: "swatches" });
+  palettes.forEach(c => {
+    const s = el("div", { class: "swatch" + (c === state.accent ? " active" : ""), style: `background: ${c};`,
+      onclick: () => {
+        state.accent = c;
+        $$(".swatch", swatches).forEach(x => x.classList.remove("active"));
+        s.classList.add("active");
+        paint();
+      }
+    });
+    swatches.append(s);
+  });
+
+  const modeRow = el("div", { class: "theme-mode" });
+  ["light", "dark", "auto"].forEach(m => {
+    const b = el("button", {
+      class: m === state.mode ? "active" : "",
+      onclick: () => {
+        state.mode = m;
+        $$("button", modeRow).forEach(x => x.classList.remove("active"));
+        b.classList.add("active");
+        paint();
+      }
+    }, m);
+    modeRow.append(b);
+  });
+
+  const ctrls = el("div", { class: "theme-controls" },
+    el("div", { class: "row" }, el("label", null, "Accent color"), swatches),
+    el("div", { class: "row" }, el("label", null, "Mode"), modeRow),
+    el("div", { style: "display: flex; gap: 8px; margin-top: 6px;" },
+      el("button", { class: "pv-btn", style: "border: 0; cursor: pointer; font-family: var(--sans);",
+        onclick: () => {
+          const prompt = `Apply theme: accent=${state.accent}, mode=${state.mode}`;
+          $("#composer").value = prompt;
+          $("#composer").focus();
+        }
+      }, "Copy as prompt"),
+      el("button", { style: "background: var(--bg-3); border: 1px solid var(--line-2); color: var(--fg); padding: 6px 12px; border-radius: 5px; font-size: 12px; cursor: pointer;",
+        onclick: () => renderNote(`Saved theme: <code style="font-family: var(--mono); color: var(--fg)">accent=${state.accent}</code>, <code style="font-family: var(--mono); color: var(--fg)">mode=${state.mode}</code>. (mock)`)
+      }, "Apply to project"),
+    ),
+  );
+
+  const node = el("div", { class: "component" },
+    header("🎨", "theme", name, "tunable", id),
+    el("div", { class: "c-body" },
+      el("div", { class: "theme-play" }, preview, ctrls),
+    ),
+  );
+  appendComponent(node);
+  registerComponent(id, "theme", node, { state });
+  setTimeout(paint, 50);
+  return id;
+}
+
+/* -- stat grid with sparklines -- */
+function renderStats(name, stats) {
+  const id = newId("stat");
+  const grid = el("div", { class: "stat-grid cascade" });
+  stats.forEach(s => {
+    // build a tiny sparkline
+    const data = s.spark || [];
+    const w = 100, h = 36;
+    const max = Math.max(...data, 1);
+    const min = Math.min(...data, 0);
+    const pts = data.map((v, i) => {
+      const x = (i / Math.max(data.length - 1, 1)) * w;
+      const y = h - ((v - min) / Math.max(max - min, 1)) * (h - 4) - 2;
+      return [x, y];
+    });
+    const linePath = pts.map((p, i) => (i ? "L" : "M") + p[0] + "," + p[1]).join(" ");
+    const areaPath = linePath + ` L${w},${h} L0,${h} Z`;
+    const lastX = pts[pts.length - 1]?.[0] || 0;
+    const lastY = pts[pts.length - 1]?.[1] || 0;
+    const svg = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <path class="area" d="${areaPath}" />
+      <path class="line" d="${linePath}" />
+      <circle class="dot" cx="${lastX}" cy="${lastY}" r="2.5" />
+    </svg>`;
+    grid.append(el("div", { class: "stat" },
+      el("div", { class: "lbl" }, s.label),
+      el("div", { class: "val" }, s.value),
+      s.delta ? el("div", { class: "delta " + (s.delta.startsWith("-") ? "down" : "") }, s.delta) : null,
+      el("div", { html: svg }),
+    ));
+  });
+  const node = el("div", { class: "component" },
+    header("📊", "stats", name, stats.length + " metrics", id),
+    el("div", { class: "c-body" }, grid),
+  );
+  appendComponent(node);
+  registerComponent(id, "stats", node, { stats });
+  return id;
+}
+
+/* -- grep / search results -- */
+function renderGrep(query, results) {
+  const id = newId("grep");
+  const body = el("div", { class: "grep cascade" });
+  results.forEach(r => {
+    const snipHtml = r.snip.replace(new RegExp(`(${query})`, "gi"), "<mark>$1</mark>");
+    body.append(el("div", { class: "hit" },
+      el("span", { class: "path" }, r.file),
+      el("span", { class: "ln" }, ":" + r.line),
+      el("span", { class: "snip", html: snipHtml }),
+    ));
+  });
+  const node = el("div", { class: "component" },
+    header("🔎", "search", `grep "${query}"`, results.length + " matches", id),
+    body,
+  );
+  appendComponent(node);
+  registerComponent(id, "grep", node, { query, results });
+  return id;
+}
+
+/* -- decision card (a question for the user) -- */
+function renderDecision(name, question, options) {
+  const id = newId("dec");
+  const opts = el("div", { class: "opts cascade" });
+  options.forEach((o, i) => {
+    opts.append(el("div", { class: "opt", onclick: () => answerDecision(id, i) },
+      el("div", { class: "opt-label" }, o.label),
+      el("div", { class: "opt-desc" }, o.desc),
+    ));
+  });
+  const node = el("div", { class: "component decision" },
+    header("?", "decision", name, "open", id),
+    el("div", { class: "c-body" },
+      el("div", { style: "margin-bottom: 10px; color: var(--fg);" }, question),
+      opts,
+    ),
+  );
+  appendComponent(node);
+  registerComponent(id, "decision", node, { question, options, picked: null });
+  return id;
+}
+function answerDecision(id, i) {
+  const b = blocks.get(id); if (!b || b.data.picked != null) return;
+  b.data.picked = i;
+  $$(".opt", b.dom).forEach((o, idx) => {
+    o.classList.toggle("picked", idx === i);
+    o.onclick = null;
+  });
+  $(".meta", b.dom).textContent = "resolved";
+  setTimeout(() => renderNote(`Going with <b>${b.data.options[i].label}</b>. (<span class="ref" data-id="${id}">@${id}</span>)`), 350);
+}
+
+/* -- git commit list -- */
+function renderCommits(name, commits) {
+  const id = newId("git");
+  const list = el("div", { class: "commits commits-rail cascade" });
+  commits.forEach(c => {
+    list.append(el("div", { class: "commit", onclick: () => renderNote(`Opening commit <code style="font-family: var(--mono)">${c.hash}</code>… (mock)`) },
+      el("div", { class: "node" }),
+      el("span", { class: "hash" }, c.hash),
+      el("span", { class: "msg" }, c.msg),
+      el("span", { class: "info" }, c.files + " files · " + c.when),
+    ));
+  });
+  const node = el("div", { class: "component" },
+    header("⎇", "commits", name, commits.length + " commits", id),
+    list,
+  );
+  appendComponent(node);
+  registerComponent(id, "git", node, { commits });
+  return id;
+}
+
+/* -- deploy / sequential progress -- */
+function renderDeploy(name, steps) {
+  const id = newId("dep");
+  const wrap = el("div", { class: "deploy cascade" });
+  steps.forEach((s, i) => {
+    wrap.append(el("div", { class: "deploy-step pend", "data-i": i },
+      el("div", { class: "ico" }, ""),
+      el("span", { class: "name" }, s.name),
+      el("span", { class: "meta" }, ""),
+    ));
+  });
+  const node = el("div", { class: "component" },
+    header("🚀", "deploy", name, "ready", id),
+    wrap,
+  );
+  appendComponent(node);
+  registerComponent(id, "deploy", node, { steps, status: "ready" });
+  return id;
+}
+async function runDeploy(id) {
+  const b = blocks.get(id); if (!b) return;
+  $(".meta", b.dom).textContent = "running…";
+  const rows = $$(".deploy-step", b.dom);
+  for (let i = 0; i < b.data.steps.length; i++) {
+    const r = rows[i];
+    r.className = "deploy-step run";
+    $(".ico", r).innerHTML = "<span>⟳</span>";
+    await sleep(b.data.steps[i].dur || 700);
+    r.className = "deploy-step done";
+    $(".ico", r).innerHTML = "✓";
+    $(".meta", r).textContent = (b.data.steps[i].time || ((Math.random() * 2 + 0.5).toFixed(1) + "s"));
+  }
+  $(".meta", b.dom).textContent = "deployed";
+}
+
 /* -- assistant note (small text) -- */
 function renderNote(html) {
   const id = newId("note");
@@ -1217,104 +1654,80 @@ function send() {
 }
 
 /* =========================================================
-   the demo "session" — building a habit tracker, prompt by prompt
+   the demo "session" — building a habit tracker over 3 days
    ========================================================= */
+function wireRefs() {
+  // wire @id refs inside the most recently rendered note(s)
+  $$(".note .ref").forEach(r => {
+    if (r._wired) return;
+    r._wired = true;
+    if (r.dataset.id) r.addEventListener("click", () => scrollToBlock(r.dataset.id));
+  });
+}
+
 async function demo() {
 
-  // Turn 1 — kickoff: ask for a plan
-  startTurn("I want to build a habit tracker web app. React + localStorage to start. Help me plan it.");
+  /* =====================  DAY 1 — Foundation  ===================== */
+  renderDay(1, "Mon, Mar 3", "Foundation", "scope, storage, schema, first cut");
+  await sleep(400);
+
+  // Turn 1.1 — kickoff plan
+  startTurn("I want to build a habit tracker web app. React + something local for storage. Help me plan it.");
   await sleep(900);
-  const planId = renderPlan("Build plan: habit tracker", [
-    "Pick storage layer (localStorage vs IndexedDB)",
-    "Design the home screen (3 directions)",
+  const planId = renderPlan("Build plan: habits/", [
+    "Pick storage layer",
+    "Sketch 3 home-screen directions",
     "Define data model & schema",
-    "Build the HabitCard component",
+    "Build HabitCard component",
     "Add streak counter with animation",
-    "Wire up check-in interaction",
-    "Write tests",
-    "Polish & ship",
+    "Iterate: theme, push notifications, bug fixes",
+    "Run full test suite",
+    "Ship it: CI/CD, deploy, analytics",
   ]);
-  await sleep(400);
-  planAdvance(planId, 0);
-  renderNote("I'll work through these top to bottom. Right-click any step to reorder or re-plan.");
-
+  await sleep(400); planAdvance(planId, 0);
+  renderNote("I'll work top-to-bottom. Right-click any step to re-plan from there.");
+  wireRefs();
   await sleep(1500);
 
-  // Turn 2 — compare storage options
-  startTurn("Compare localStorage vs IndexedDB vs SQLite-wasm for this");
+  // Turn 1.2 — compare storage
+  startTurn("Compare localStorage vs IndexedDB vs SQLite-wasm");
   await sleep(900);
-  renderCompare("Storage options for habits", ["Setup", "Capacity", "Queryable", "Migrations", "Verdict"], [
-    {
-      option: "localStorage",
-      values: [
-        { text: "trivial",       kind: "ok" },
-        { text: "5 MB",          kind: "med" },
-        { text: "no",            kind: "no" },
-        { text: "manual",        kind: "no" },
-        { text: "fine for v1",   kind: "ok" },
-      ],
-    },
-    {
-      option: "IndexedDB (via Dexie)",
-      values: [
-        { text: "small lib",     kind: "med" },
-        { text: "GBs",           kind: "ok" },
-        { text: "yes (indexes)", kind: "ok" },
-        { text: "supported",     kind: "ok" },
-        { text: "right call",    kind: "ok" },
-      ],
-    },
-    {
-      option: "SQLite-wasm",
-      values: [
-        { text: "heavy",         kind: "no" },
-        { text: "GBs",           kind: "ok" },
-        { text: "full SQL",      kind: "ok" },
-        { text: "manual",        kind: "med" },
-        { text: "overkill",      kind: "no" },
-      ],
-    },
+  const cmpId = renderCompare("Storage options", ["Setup", "Capacity", "Queryable", "Migrations", "Verdict"], [
+    { option: "localStorage",        values: [{text:"trivial",kind:"ok"},{text:"5 MB",kind:"med"},{text:"no",kind:"no"},{text:"manual",kind:"no"},{text:"fine for v0",kind:"med"}] },
+    { option: "IndexedDB (Dexie)",   values: [{text:"small lib",kind:"med"},{text:"GBs",kind:"ok"},{text:"yes",kind:"ok"},{text:"supported",kind:"ok"},{text:"right call",kind:"ok"}] },
+    { option: "SQLite-wasm",         values: [{text:"heavy",kind:"no"},{text:"GBs",kind:"ok"},{text:"full SQL",kind:"ok"},{text:"manual",kind:"med"},{text:"overkill",kind:"no"}] },
   ]);
-
-  await sleep(2200);  // simulate user reading + picking
-  await sleep(400);
-  // pretend the user clicked "pick" on row 1 (IndexedDB)
-  const cmpBlock = [...blocks.values()].find(b => b.kind === "compare");
-  pickRow(cmpBlock.id, 1);
-  planAdvance(planId, 1);
-
+  await sleep(2400);
+  pickRow(cmpId, 1); planAdvance(planId, 1);
   await sleep(1500);
 
-  // Turn 3 — design exploration
-  startTurn("Sketch 3 visual directions for the home screen — I want to compare side by side");
+  // Turn 1.3 — design directions
+  startTurn("Sketch 3 visual directions for the home screen");
   await sleep(900);
-  renderDesigns("Home screen — 3 directions", [
+  const desId = renderDesigns("Home screen — 3 directions", [
     { name: "List of cards",   tag: "minimal",    mock: mocks.cards },
     { name: "Calendar grid",   tag: "data-dense", mock: mocks.grid  },
     { name: "Streak hero",     tag: "playful",    mock: mocks.timeline },
   ]);
-  renderNote("Click a tile to pick a direction, or right-click to ask for variations.");
-
+  renderNote("Click a tile to pick a direction, or right-click for more.");
+  wireRefs();
   await sleep(2400);
-  const dBlock = [...blocks.values()].find(b => b.kind === "design");
-  pickDesign(dBlock.id, 2);
-  planAdvance(planId, 2);
-
+  pickDesign(desId, 2); planAdvance(planId, 2);
   await sleep(1500);
 
-  // Turn 4 — schema
+  // Turn 1.4 — schema
   startTurn("Show me the data schema you'd use");
   await sleep(900);
-  renderSchema("habits/v1 — schema");
-  renderNote("Tap a table to see what it's for.");
+  const schId = renderSchema("habits/v1 — schema");
+  renderNote("Click a table to see what it's for.");
+  wireRefs();
   planAdvance(planId, 3);
+  await sleep(2400);
 
-  await sleep(2200);
-
-  // Turn 5 — the actual code
+  // Turn 1.5 — code
   startTurn("Generate the HabitCard React component for the streak-hero direction");
   await sleep(1100);
-  renderCode("src/components/HabitCard.tsx", "tsx", `import { useState } from "react";
+  const codeId = renderCode("src/components/HabitCard.tsx", "tsx", `import { useState } from "react";
 import { useHabit } from "../hooks/useHabit";
 
 interface HabitCardProps {
@@ -1343,61 +1756,354 @@ export function HabitCard({ habitId }: HabitCardProps) {
   );
 }`);
   planAdvance(planId, 4);
+  await sleep(1800);
 
-  await sleep(1500);
-
-  // Turn 6 — animation playground
+  // Turn 1.6 — animation playground
   startTurn("Make the streak-counter bump animation tunable so I can dial it in");
   await sleep(900);
-  renderPlayground("Streak counter animation");
-  renderNote("Drag the sliders, watch the preview, then click <b>Copy as prompt</b> when you like the feel.");
-  planAdvance(planId, 5);
+  const playId = renderPlayground("Streak counter animation");
+  renderNote(`Drag the sliders. Hit <b>Copy as prompt</b> when you like the feel — I'll apply those values to <span class="ref" data-id="${codeId}">@${codeId}</span>.`);
+  wireRefs();
+  await sleep(2200);
+
+  // Turn 1.7 — commit
+  startTurn("Looks good. Commit what we have so far.");
+  await sleep(700);
+  const t1 = renderTerminal("git commit -am 'Initial habits/ skeleton'");
+  await sleep(400);
+  termWrite(t1, "[main 9ef41a2] Initial habits/ skeleton");
+  termWrite(t1, " 7 files changed, 184 insertions(+)");
+  termWrite(t1, " create mode 100644 src/components/HabitCard.tsx", "dim");
+  termWrite(t1, " create mode 100644 src/components/Streak.tsx",    "dim");
+  termWrite(t1, " create mode 100644 src/hooks/useHabit.ts",        "dim");
+  await sleep(300); termDone(t1, true);
+  renderNote("Day 1 sums up: ~180 lines, 1 plan halfway done. The streak feel still needs love but tomorrow I'll iterate.");
+
+  await sleep(2000);
+
+
+  /* =====================  DAY 2 — Iteration  ===================== */
+  renderDay(2, "Tue, Mar 4", "Iteration", "a bug, a theme, and a hard decision");
+  await sleep(400);
+
+  // Turn 2.1 — bug report
+  startTurn("Quick — there's a bug. When you skip a day, the streak resets to 0 instead of pausing. Find it.");
+  await sleep(900);
+  renderGrep("streak", [
+    { file: "src/hooks/useHabit.ts",   line: 24, snip: "if (daysSinceLastCheckin > 1) streak.current = 0" },
+    { file: "src/hooks/useHabit.ts",   line: 41, snip: "return { streak, checkIn }" },
+    { file: "src/components/Streak.tsx", line: 8,  snip: "<div className=\"streak\">{streak.current}</div>" },
+    { file: "src/db/schema.ts",        line: 17, snip: "current: integer().notNull()" },
+  ]);
+  await sleep(1200);
+  renderNote(`Found it — <span class="ref" data-id="${codeId}">useHabit.ts:24</span> resets on any gap > 1 day. We want to <i>pause</i> the streak on a gap of exactly 1, not reset it.`);
+  wireRefs();
+  await sleep(1200);
+
+  // Turn 2.2 — show the diff
+  startTurn("Show me the fix");
+  await sleep(900);
+  renderDiff("src/hooks/useHabit.ts", [{ startLine: 20, lines: [
+    [" ", "function nextStreak(prev: Streak, lastDate: string, today: string) {"],
+    [" ", "  const gap = daysBetween(lastDate, today);"],
+    ["-", "  if (gap > 1) return { current: 0, longest: prev.longest };"],
+    ["+", "  if (gap === 0) return prev;            // already checked in today"],
+    ["+", "  if (gap === 1) return bump(prev);      // continued: +1"],
+    ["+", "  if (gap === 2) return prev;            // grace day: pause"],
+    ["+", "  return { current: 0, longest: prev.longest }; // > 2 days = lost"],
+    [" ", "}"],
+  ]}]);
+  renderNote("Pauses on a 1-day gap, resets only after 2. Wired through three places.");
+
+  await sleep(1800);
+
+  // Turn 2.3 — a decision
+  startTurn("Should I add a 'streak freeze' as an opt-in product feature too?");
+  await sleep(800);
+  const decId = renderDecision("Streak freeze feature",
+    "How should users be able to skip a day without losing their streak?",
+    [
+      { label: "Grace day, automatic",     desc: "Every Nth missed day is free. No UI, no decision." },
+      { label: "Manual streak-freeze",     desc: "User taps 'freeze today' before midnight. Limited per month." },
+      { label: "Both — auto + manual",     desc: "1 free auto-grace per week, plus 2 manual freezes per month." },
+    ]);
+  await sleep(2200);
+  answerDecision(decId, 2);
+  await sleep(1500);
+
+  // Turn 2.4 — theme picker
+  startTurn("Let me play with the visual theme. Show me a live picker.");
+  await sleep(900);
+  renderTheme("App theme");
+  renderNote("Pick a color, toggle the mode, click <b>Apply to project</b> or <b>Copy as prompt</b>.");
 
   await sleep(2400);
 
-  // Turn 7 — file tree of what got built
-  startTurn("What does the project look like now?");
+  // Turn 2.5 — small refactor
+  startTurn("The bug fix touched useHabit.ts. Run tests for that file specifically.");
   await sleep(800);
-  renderTree("habits/", [
-    { path: "src",                       kind: "dir" },
-    { path: "src/App.tsx" },
-    { path: "src/components",            kind: "dir" },
-    { path: "src/components/HabitCard.tsx", isNew: true },
-    { path: "src/components/Streak.tsx",    isNew: true },
-    { path: "src/components/CheckInButton.tsx", isNew: true },
-    { path: "src/hooks",                 kind: "dir" },
-    { path: "src/hooks/useHabit.ts",     isNew: true },
-    { path: "src/db",                    kind: "dir" },
-    { path: "src/db/schema.ts",          isNew: true },
-    { path: "src/db/index.ts",           isNew: true },
-    { path: "package.json" },
+  const t2 = renderTests("vitest useHabit", [
+    { name: "increments streak on consecutive days",  status: "run" },
+    { name: "preserves streak on 1-day gap (NEW)",    status: "pend" },
+    { name: "resets streak on 2-day gap (NEW)",       status: "pend" },
+    { name: "does not double-count same day",         status: "pend" },
+    { name: "respects manual freeze (NEW)",           status: "pend" },
   ]);
-
+  await sleep(700); setTest(t2, "increments streak on consecutive days", "pass", "12ms"); setTest(t2, "preserves streak on 1-day gap (NEW)", "run");
+  await sleep(800); setTest(t2, "preserves streak on 1-day gap (NEW)",   "pass", "18ms"); setTest(t2, "resets streak on 2-day gap (NEW)",     "run");
+  await sleep(700); setTest(t2, "resets streak on 2-day gap (NEW)",      "pass", "21ms"); setTest(t2, "does not double-count same day",      "run");
+  await sleep(700); setTest(t2, "does not double-count same day",        "pass", "9ms");  setTest(t2, "respects manual freeze (NEW)",        "run");
+  await sleep(900); setTest(t2, "respects manual freeze (NEW)",          "fail", "44ms");
+  finishTests(t2);
+  await sleep(600);
+  renderNote(`One failure in <span class="ref" data-id="${t2}">@${t2}</span> — the manual-freeze test isn't seeing the new prop. Easy fix tomorrow.`);
+  wireRefs();
   await sleep(1500);
 
-  // Turn 8 — run tests
-  startTurn("Run the tests");
+  // Turn 2.6 — commits today
+  startTurn("Show me everything I committed today");
   await sleep(700);
-  const tt = renderTests("vitest", [
-    { name: "HabitCard renders",                status: "run" },
-    { name: "useHabit increments streak",       status: "pend" },
-    { name: "useHabit resets on missed day",    status: "pend" },
-    { name: "Streak animation triggers",        status: "pend" },
+  renderCommits("today on main", [
+    { hash: "a14b9d2", msg: "Fix streak reset on 1-day gap; add grace-day logic", files: 3, when: "11:18" },
+    { hash: "d3e8772", msg: "Add streak-freeze (manual, 2/month)",                files: 5, when: "14:04" },
+    { hash: "7c1f33b", msg: "Wire theme picker to CSS variables",                 files: 4, when: "16:22" },
+    { hash: "9b4a1e0", msg: "Tests for new streak behaviors (1 failing)",         files: 1, when: "17:48" },
   ]);
-  await sleep(700); setTest(tt, "HabitCard renders", "pass", "8ms"); setTest(tt, "useHabit increments streak", "run");
-  await sleep(700); setTest(tt, "useHabit increments streak", "pass", "21ms"); setTest(tt, "useHabit resets on missed day", "run");
-  await sleep(700); setTest(tt, "useHabit resets on missed day", "pass", "18ms"); setTest(tt, "Streak animation triggers", "run");
-  await sleep(700); setTest(tt, "Streak animation triggers", "pass", "31ms");
+
+  await sleep(2000);
+
+
+  /* =====================  DAY 3 — Ship  ===================== */
+  renderDay(3, "Wed, Mar 5", "Ship", "notifications, deploy, analytics, done");
+  await sleep(400);
+
+  // Turn 3.1 — fix the failing test
+  startTurn("Start with that failing freeze test. Fix it.");
+  await sleep(900);
+  renderDiff("src/components/HabitCard.tsx", [{ startLine: 6, lines: [
+    [" ", "interface HabitCardProps {"],
+    [" ", "  habitId: string;"],
+    ["+", "  allowFreeze?: boolean;"],
+    [" ", "}"],
+    [" ", ""],
+    ["-", "export function HabitCard({ habitId }: HabitCardProps) {"],
+    ["+", "export function HabitCard({ habitId, allowFreeze = true }: HabitCardProps) {"],
+    [" ", "  const { habit, streak, checkIn, freeze } = useHabit(habitId);"],
+  ]}]);
+  await sleep(700);
+  const t3 = renderTests("vitest useHabit — re-run", [
+    { name: "respects manual freeze (NEW)", status: "run" },
+  ]);
+  await sleep(900);
+  setTest(t3, "respects manual freeze (NEW)", "pass", "16ms");
+  finishTests(t3);
+  await sleep(1200);
+
+  // Turn 3.2 — notifications plan
+  startTurn("Now let's add daily reminder notifications. What are the options?");
+  await sleep(900);
+  renderCompare("Notification channels", ["Setup", "Reach", "Engagement", "Cost", "Verdict"], [
+    { option: "Web Push",         values: [{text:"VAPID + SW",kind:"med"},{text:"desktop+mobile",kind:"ok"},{text:"high",kind:"ok"},{text:"$0",kind:"ok"},{text:"start here",kind:"ok"}] },
+    { option: "Email (Resend)",   values: [{text:"~10 min",kind:"ok"},{text:"universal",kind:"ok"},{text:"med",kind:"med"},{text:"~$0.001",kind:"ok"},{text:"v2",kind:"med"}] },
+    { option: "SMS (Twilio)",     values: [{text:"~30 min",kind:"med"},{text:"universal",kind:"ok"},{text:"high",kind:"ok"},{text:"$0.0075",kind:"no"},{text:"too costly",kind:"no"}] },
+  ]);
+  await sleep(2200);
+
+  // Turn 3.3 — notification component code
+  startTurn("Generate the push notification setup. Use the service worker pattern.");
+  await sleep(1000);
+  renderCode("src/notifications.ts", "ts", `import { db } from "./db";
+
+const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC;
+
+export async function subscribeToReminders() {
+  if (!("serviceWorker" in navigator)) throw new Error("SW not supported");
+
+  const reg = await navigator.serviceWorker.register("/sw.js");
+  const existing = await reg.pushManager.getSubscription();
+  if (existing) return existing;
+
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: VAPID_PUBLIC,
+  });
+
+  await db.subscriptions.add({
+    endpoint: sub.endpoint,
+    createdAt: Date.now(),
+  });
+
+  return sub;
+}
+
+export async function scheduleDailyReminder(habitId: string, hour: number) {
+  // browser-side schedule + server fallback
+  return fetch("/api/reminders", {
+    method: "POST",
+    body: JSON.stringify({ habitId, hour }),
+  });
+}`);
+  await sleep(1500);
+
+  // Turn 3.4 — write the migration
+  startTurn("Add the database migration for the subscriptions table");
+  await sleep(800);
+  renderDiff("migrations/0003_subscriptions.sql", [{ startLine: 1, lines: [
+    ["+", "CREATE TABLE subscriptions ("],
+    ["+", "  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),"],
+    ["+", "  user_id     uuid NOT NULL REFERENCES users(id),"],
+    ["+", "  endpoint    text NOT NULL UNIQUE,"],
+    ["+", "  hour        smallint NOT NULL,"],
+    ["+", "  created_at  timestamptz NOT NULL DEFAULT now()"],
+    ["+", ");"],
+    ["+", ""],
+    ["+", "CREATE INDEX subs_user_idx ON subscriptions(user_id);"],
+  ]}]);
+  await sleep(1400);
+
+  // Turn 3.5 — set up CI
+  startTurn("Wire up CI to run tests + deploy on push to main");
+  await sleep(900);
+  renderCode(".github/workflows/ci.yml", "yaml", `name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci
+      - run: npm run test
+      - run: npm run typecheck
+      - run: npm run build
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npx vercel deploy --prod --token=\${{ secrets.VERCEL_TOKEN }}`);
+  await sleep(1500);
+
+  // Turn 3.6 — full test run
+  startTurn("Run the full test suite before we ship");
+  await sleep(700);
+  const tt = renderTests("vitest — full suite", [
+    { name: "HabitCard renders",                                    status: "run" },
+    { name: "HabitCard shows streak count",                         status: "pend" },
+    { name: "useHabit increments streak on consecutive days",       status: "pend" },
+    { name: "useHabit preserves streak on 1-day gap",               status: "pend" },
+    { name: "useHabit resets on 2-day gap",                         status: "pend" },
+    { name: "useHabit respects manual freeze",                      status: "pend" },
+    { name: "Theme switcher changes accent color",                  status: "pend" },
+    { name: "Theme persists across reloads",                        status: "pend" },
+    { name: "Notifications: subscribeToReminders registers SW",     status: "pend" },
+    { name: "Notifications: scheduleDailyReminder POSTs",           status: "pend" },
+    { name: "Migration 0003 creates subscriptions table",           status: "pend" },
+  ]);
+  const names = [
+    "HabitCard renders",
+    "HabitCard shows streak count",
+    "useHabit increments streak on consecutive days",
+    "useHabit preserves streak on 1-day gap",
+    "useHabit resets on 2-day gap",
+    "useHabit respects manual freeze",
+    "Theme switcher changes accent color",
+    "Theme persists across reloads",
+    "Notifications: subscribeToReminders registers SW",
+    "Notifications: scheduleDailyReminder POSTs",
+    "Migration 0003 creates subscriptions table",
+  ];
+  for (let i = 0; i < names.length; i++) {
+    await sleep(420);
+    setTest(tt, names[i], "pass", (Math.floor(Math.random() * 30) + 8) + "ms");
+    if (i + 1 < names.length) setTest(tt, names[i + 1], "run");
+  }
   finishTests(tt);
   planAdvance(planId, 6);
+  await sleep(1200);
 
+  // Turn 3.7 — deploy
+  startTurn("Ship it");
   await sleep(800);
-  renderNote("All four green. Plan is at 7/8 — only <b>polish & ship</b> left. Try right-clicking any component above (the <span class='ref' data-id='" + planId + "'>plan</span>, the <span class='ref' data-id='" + dBlock.id + "'>design grid</span>, the playground) and ask me something specific.");
-  // wire ref clicks
-  $$(".note .ref").forEach(r => {
-    if (!r.dataset.id) return;
-    r.addEventListener("click", () => scrollToBlock(r.dataset.id));
-  });
+  const dep = renderDeploy("Deploy to production (Vercel)", [
+    { name: "Lint",            dur: 600 },
+    { name: "Type check",      dur: 700 },
+    { name: "Build bundle",    dur: 1100 },
+    { name: "Run migrations",  dur: 800 },
+    { name: "Upload artifact", dur: 900 },
+    { name: "Promote to prod", dur: 700 },
+    { name: "Warm caches",     dur: 600 },
+  ]);
+  await sleep(200);
+  await runDeploy(dep);
+  await sleep(400);
+  renderNote(`🎉 Live at <code style="font-family: var(--mono); color: var(--accent)">habits.app</code>. <span class="ref" data-id="${planId}">@${planId}</span> — last step (analytics) below.`);
+  wireRefs();
+  await sleep(1500);
+
+  // Turn 3.8 — analytics + final file tree
+  startTurn("Add minimal analytics and show me the final project tree");
+  await sleep(900);
+  renderDiff("src/App.tsx", [{ startLine: 1, lines: [
+    [" ", "import { useEffect } from \"react\";"],
+    ["+", "import { initAnalytics, track } from \"./analytics\";"],
+    [" ", ""],
+    [" ", "export function App() {"],
+    ["+", "  useEffect(() => initAnalytics(), []);"],
+    ["+", "  useEffect(() => track(\"app.open\"), []);"],
+    [" ", "  return <Home />;"],
+    [" ", "}"],
+  ]}]);
+  await sleep(700);
+  renderTree("habits/ — final", [
+    { path: "src",                            kind: "dir" },
+    { path: "src/App.tsx" },
+    { path: "src/analytics.ts",               isNew: true },
+    { path: "src/notifications.ts",           isNew: true },
+    { path: "src/theme.ts",                   isNew: true },
+    { path: "src/components",                 kind: "dir" },
+    { path: "src/components/HabitCard.tsx" },
+    { path: "src/components/Streak.tsx" },
+    { path: "src/components/CheckInButton.tsx" },
+    { path: "src/components/ThemePicker.tsx", isNew: true },
+    { path: "src/components/SubscribeButton.tsx", isNew: true },
+    { path: "src/hooks",                      kind: "dir" },
+    { path: "src/hooks/useHabit.ts" },
+    { path: "src/hooks/useTheme.ts",          isNew: true },
+    { path: "src/db",                         kind: "dir" },
+    { path: "src/db/schema.ts" },
+    { path: "src/db/index.ts" },
+    { path: "migrations",                     kind: "dir" },
+    { path: "migrations/0001_init.sql" },
+    { path: "migrations/0002_freeze.sql",     isNew: true },
+    { path: "migrations/0003_subscriptions.sql", isNew: true },
+    { path: ".github/workflows/ci.yml",       isNew: true },
+    { path: "package.json" },
+  ]);
+  await sleep(1500);
+
+  // Turn 3.9 — final stats
+  startTurn("Wrap up — what did we build?");
+  await sleep(900);
+  renderStats("3-day build summary", [
+    { label: "Lines of code",     value: "1,284", delta: "+1,284", spark: [0, 184, 184, 320, 540, 720, 980, 1284] },
+    { label: "Components",        value: "11",    delta: "+11",    spark: [0, 3, 5, 5, 7, 9, 10, 11] },
+    { label: "Tests",             value: "11 / 11", delta: "100%", spark: [0, 4, 4, 5, 9, 10, 11, 11] },
+    { label: "Commits",           value: "17",    delta: "+17",    spark: [0, 5, 5, 9, 11, 13, 16, 17] },
+    { label: "Tables",            value: "4",     delta: "+4",     spark: [0, 2, 2, 3, 3, 3, 4, 4] },
+    { label: "Deploys",           value: "1",     delta: "live",   spark: [0, 0, 0, 0, 0, 0, 0, 1] },
+  ]);
+  planAdvance(planId, 7);
+  await sleep(800);
+  renderNote(`Shipped. Plan <span class="ref" data-id="${planId}">@${planId}</span> is 8/8. Right-click any component from any day to ask me about it — the whole stack stays interactive.`);
+  wireRefs();
 
   $("#live-pill").textContent = "idle";
   $("#live-pill").classList.remove("live");
