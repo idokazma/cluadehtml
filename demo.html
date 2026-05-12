@@ -96,7 +96,14 @@
   }
 
   /* a "turn": one user prompt + the components it produced */
-  .turn { display: flex; flex-direction: column; gap: 10px; }
+  .turn {
+    display: flex; flex-direction: column; gap: 10px;
+    animation: turn-in 360ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes turn-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
   .turn-prompt {
     align-self: flex-end;
     max-width: 70%;
@@ -108,6 +115,12 @@
     line-height: 1.45;
     color: var(--fg);
     cursor: context-menu;
+    transition: border-color 160ms ease, background 160ms ease;
+    animation: prompt-in 380ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes prompt-in {
+    from { opacity: 0; transform: translate(8px, 4px) scale(.97); }
+    to   { opacity: 1; transform: translate(0, 0) scale(1); }
   }
   .turn-prompt:hover { border-color: var(--accent); }
   .turn-prompt .who {
@@ -122,24 +135,49 @@
     border: 1px solid var(--line);
     border-radius: 10px;
     overflow: hidden;
-    animation: slidein 220ms ease;
-    transition: border-color 120ms;
+    transform-origin: 50% 0;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+    animation: component-in 520ms cubic-bezier(.2,.8,.2,1) both;
+    will-change: transform, opacity;
   }
   .component:hover { border-color: var(--line-2); }
-  .component.flash {
-    animation: flash 800ms ease;
-  }
-  @keyframes slidein {
-    from { opacity: 0; transform: translateY(6px); }
-    to   { opacity: 1; transform: translateY(0); }
+  .component.flash { animation: flash 900ms cubic-bezier(.2,.8,.2,1); }
+  @keyframes component-in {
+    0%   { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(2px); }
+    60%  { opacity: 1; filter: blur(0); }
+    100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
   }
   @keyframes flash {
-    0%   { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    0%   { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
     100% { border-color: var(--line); box-shadow: 0 0 0 0 transparent; }
   }
   .component.referenced {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
+    transition: border-color 180ms ease, box-shadow 180ms ease;
+  }
+
+  /* cascade utility: child elements fade in one after another */
+  .cascade > * {
+    opacity: 0;
+    transform: translateY(4px);
+    animation: cascade-in 380ms cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  .cascade > *:nth-child(1)  { animation-delay:  60ms; }
+  .cascade > *:nth-child(2)  { animation-delay: 110ms; }
+  .cascade > *:nth-child(3)  { animation-delay: 160ms; }
+  .cascade > *:nth-child(4)  { animation-delay: 210ms; }
+  .cascade > *:nth-child(5)  { animation-delay: 260ms; }
+  .cascade > *:nth-child(6)  { animation-delay: 310ms; }
+  .cascade > *:nth-child(7)  { animation-delay: 360ms; }
+  .cascade > *:nth-child(8)  { animation-delay: 410ms; }
+  .cascade > *:nth-child(9)  { animation-delay: 460ms; }
+  .cascade > *:nth-child(10) { animation-delay: 510ms; }
+  .cascade > *:nth-child(11) { animation-delay: 560ms; }
+  .cascade > *:nth-child(12) { animation-delay: 610ms; }
+  .cascade > *:nth-child(n+13) { animation-delay: 660ms; }
+  @keyframes cascade-in {
+    to { opacity: 1; transform: translateY(0); }
   }
 
   .c-head {
@@ -171,6 +209,7 @@
   .plan li {
     display: flex; align-items: center; gap: 10px;
     padding: 7px 9px; border-radius: 6px; cursor: pointer;
+    transition: background 180ms ease, color 240ms ease;
   }
   .plan li:hover { background: var(--bg-3); }
   .plan li.done { color: var(--fg-mute); text-decoration: line-through; }
@@ -178,9 +217,20 @@
   .plan .check {
     width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--line-2);
     flex-shrink: 0; display: grid; place-items: center;
+    transition: background 220ms cubic-bezier(.2,.8,.2,1), border-color 220ms ease, transform 220ms cubic-bezier(.34,1.56,.64,1);
   }
-  .plan li.done .check { background: var(--green); border-color: var(--green); }
-  .plan li.done .check::after { content: "✓"; color: white; font-size: 10px; line-height: 1; }
+  .plan li.done .check {
+    background: var(--green); border-color: var(--green);
+    transform: scale(1.08);
+  }
+  .plan li.done .check::after {
+    content: "✓"; color: white; font-size: 10px; line-height: 1;
+    animation: pop 280ms cubic-bezier(.34,1.56,.64,1) both;
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.4); }
+    to   { opacity: 1; transform: scale(1); }
+  }
   .plan li.active .check { border-color: var(--accent); }
   .plan li.active .check::after {
     content: ""; width: 6px; height: 6px; border-radius: 50%;
@@ -333,6 +383,15 @@
     background: #08090b; color: #cdd1d8; padding: 10px 12px;
     margin: 0; max-height: 220px; overflow-y: auto;
     white-space: pre-wrap;
+    scroll-behavior: smooth;
+  }
+  .term .line {
+    display: block;
+    animation: term-line 320ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes term-line {
+    from { opacity: 0; transform: translateY(3px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
   .term .ok { color: var(--green); }
   .term .err { color: var(--red); }
@@ -343,17 +402,32 @@
   .test {
     display: flex; align-items: center; gap: 10px;
     padding: 5px 12px; font-family: var(--mono); font-size: 12.5px;
+    transition: background 180ms ease;
   }
   .test .badge {
     width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center;
     font-size: 11px; color: white; flex-shrink: 0;
+    transition: background 220ms cubic-bezier(.2,.8,.2,1), color 220ms ease, border-color 220ms ease;
+  }
+  .test .badge > span {
+    display: inline-block;
+    animation: pop 280ms cubic-bezier(.34,1.56,.64,1) both;
   }
   .test.pass .badge { background: var(--green); }
   .test.fail .badge { background: var(--red); }
   .test.run  .badge { background: var(--blue); }
+  .test.run  .badge > span { animation: spin 900ms linear infinite; }
+  @keyframes spin {
+    0%   { transform: rotate(0); }
+    100% { transform: rotate(360deg); }
+  }
   .test.pend .badge { background: var(--bg-3); border: 1px solid var(--line-2); color: var(--fg-mute); }
   .test .name { color: var(--fg); }
-  .test .time { margin-left: auto; color: var(--fg-mute); font-size: 11px; }
+  .test .time {
+    margin-left: auto; color: var(--fg-mute); font-size: 11px;
+    animation: fadein 320ms ease both;
+  }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
   /* file tree */
   .tree { font-family: var(--mono); font-size: 12.5px; padding: 4px 0; }
@@ -368,6 +442,11 @@
   .note {
     font-size: 13px; color: var(--fg-dim); line-height: 1.5;
     padding: 8px 14px;
+    animation: note-in 380ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes note-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
   .note .ref {
     color: var(--accent); font-family: var(--mono); font-size: 11.5px;
@@ -420,6 +499,47 @@
   ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
 
+  /* main scroll smoothness */
+  main { scroll-behavior: smooth; }
+
+  /* "jump to latest" pill — appears when user scrolls up while session is moving */
+  .jump-pill {
+    position: fixed; left: 50%; bottom: 86px;
+    transform: translate(-50%, 14px);
+    background: var(--accent); color: #fff;
+    border: 0; border-radius: 999px;
+    padding: 7px 14px; font-size: 12px; font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 6px 18px #00000080, 0 0 0 1px #00000040;
+    opacity: 0; pointer-events: none;
+    transition: opacity 220ms ease, transform 280ms cubic-bezier(.2,.8,.2,1);
+    z-index: 50;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .jump-pill.show {
+    opacity: 1; pointer-events: auto;
+    transform: translate(-50%, 0);
+  }
+  .jump-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #fff;
+    animation: pulse-white 1.4s infinite;
+  }
+  @keyframes pulse-white {
+    0%   { box-shadow: 0 0 0 0 #ffffffaa; }
+    70%  { box-shadow: 0 0 0 6px #ffffff00; }
+    100% { box-shadow: 0 0 0 0 #ffffff00; }
+  }
+
+  /* respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 1ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   /* turn divider */
   .turn-divider {
     text-align: center; color: var(--fg-mute); font-size: 11px;
@@ -463,6 +583,8 @@
     <button class="send-btn" id="send">Send</button>
   </div>
 </div>
+
+<button class="jump-pill" id="jump-pill"><span class="dot"></span>New activity — jump to latest</button>
 
 <div class="ctx-menu" id="ctx-menu" style="display:none"></div>
 
@@ -521,18 +643,70 @@ function startTurn(prompt) {
   // register the prompt as a block too (so you can right-click it)
   const pid = newId("p");
   registerComponent(pid, "prompt", pBlock, { text: prompt });
-  // autoscroll
-  const m = $("#main");
-  m.scrollTop = m.scrollHeight;
+  scrollSoon();
   return turn;
 }
 
 function appendComponent(node) {
   if (!currentTurn) currentTurn = $("#stream");
   currentTurn.append(node);
-  const m = $("#main");
-  if (m.scrollHeight - m.scrollTop - m.clientHeight < 250) m.scrollTop = m.scrollHeight;
+  scrollSoon();
 }
+
+/* ---- smooth scroll system ----
+   "Follow" mode is on while the user is near the bottom. New content
+   smoothly scrolls into view. If the user scrolls up to read history,
+   follow mode turns off and a "jump to latest" pill appears.
+*/
+const NEAR_BOTTOM_PX = 220;
+let following = true;
+let pendingScroll = false;
+const mainEl = () => document.getElementById("main");
+const jumpPill = () => document.getElementById("jump-pill");
+
+function isNearBottom() {
+  const m = mainEl();
+  return m.scrollHeight - m.scrollTop - m.clientHeight < NEAR_BOTTOM_PX;
+}
+
+function scrollSoon() {
+  if (!following) {
+    showJumpPill();
+    return;
+  }
+  if (pendingScroll) return;
+  pendingScroll = true;
+  // wait for layout, then a smooth scroll using rAF for buttery feel
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    pendingScroll = false;
+    const m = mainEl();
+    m.scrollTo({ top: m.scrollHeight, behavior: "smooth" });
+  }));
+}
+
+function showJumpPill() {
+  jumpPill().classList.add("show");
+}
+function hideJumpPill() {
+  jumpPill().classList.remove("show");
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const m = mainEl();
+  m.addEventListener("scroll", () => {
+    if (isNearBottom()) {
+      following = true;
+      hideJumpPill();
+    } else {
+      following = false;
+    }
+  }, { passive: true });
+  jumpPill().addEventListener("click", () => {
+    following = true;
+    hideJumpPill();
+    m.scrollTo({ top: m.scrollHeight, behavior: "smooth" });
+  });
+});
 
 function header(icon, kind, name, meta, idTag) {
   return el("div", { class: "c-head" },
@@ -551,7 +725,7 @@ function header(icon, kind, name, meta, idTag) {
 /* -- plan -- */
 function renderPlan(name, items) {
   const id = newId("plan");
-  const ul = el("ul");
+  const ul = el("ul", { class: "cascade" });
   items.forEach((label, i) => {
     const li = el("li", { onclick: () => { items[i].done = !items[i].done; refreshPlan(id); } },
       el("span", { class: "check" }),
@@ -594,7 +768,7 @@ function renderCompare(name, columns, rows) {
   thead.append(el("th", null, ""));
   table.append(thead);
   rows.forEach((r, ri) => {
-    const tr = el("tr", { "data-row": ri });
+    const tr = el("tr", { "data-row": ri, style: `opacity: 0; transform: translateY(4px); animation: cascade-in 380ms cubic-bezier(.2,.8,.2,1) ${120 + ri * 80}ms forwards;` });
     tr.append(el("td", { class: "opt" }, r.option));
     r.values.forEach((v, ci) => tr.append(el("td", null, el("span", { class: `v ${v.kind || ""}` }, v.text || v))));
     tr.append(el("td", null, el("button", { class: "pick", onclick: () => pickRow(id, ri) }, "pick")));
@@ -620,7 +794,7 @@ function pickRow(id, ri) {
 /* -- design exploration -- */
 function renderDesigns(name, designs) {
   const id = newId("des");
-  const grid = el("div", { class: "designs" });
+  const grid = el("div", { class: "designs cascade" });
   designs.forEach((d, i) => {
     const tile = el("div", { class: "design", onclick: () => pickDesign(id, i) },
       el("div", { class: "preview" }, ...d.mock()),
@@ -869,7 +1043,7 @@ function renderDiff(filename, hunks) {
 /* -- file tree -- */
 function renderTree(name, paths) {
   const id = newId("tree");
-  const wrap = el("div", { class: "tree" });
+  const wrap = el("div", { class: "tree cascade" });
   paths.forEach(p => {
     const depth = (p.path.match(/\//g) || []).length;
     wrap.append(el("div", { class: `row ${p.kind || "file"} ${p.isNew ? "new" : ""}` },
@@ -902,8 +1076,8 @@ function renderTerminal(cmd) {
 function termWrite(id, text, cls) {
   const b = blocks.get(id); if (!b) return;
   const term = $(".term", b.dom);
-  term.append(cls ? el("span", { class: cls }, text + "\n") : document.createTextNode(text + "\n"));
-  term.scrollTop = term.scrollHeight;
+  term.append(el("span", { class: "line" + (cls ? " " + cls : "") }, text + "\n"));
+  term.scrollTo({ top: term.scrollHeight, behavior: "smooth" });
 }
 function termDone(id, ok=true) {
   const b = blocks.get(id); if (!b) return;
@@ -913,7 +1087,7 @@ function termDone(id, ok=true) {
 /* -- tests -- */
 function renderTests(name, tests) {
   const id = newId("tst");
-  const wrap = el("div", { class: "tests" });
+  const wrap = el("div", { class: "tests cascade" });
   tests.forEach(t => wrap.append(testRow(t)));
   const node = el("div", { class: "component" },
     header("✓", "tests", name, "running…", id),
