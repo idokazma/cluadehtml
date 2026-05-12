@@ -76,6 +76,32 @@
     margin-left: auto; background: var(--accent); color: #fff; border: 0;
     padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
   }
+  .speed-control { display: flex; gap: 2px; background: var(--bg-3); border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
+  .speed-control button {
+    background: transparent; border: 0; color: var(--fg-dim);
+    padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;
+    font-family: var(--mono);
+  }
+  .speed-control button:hover { color: var(--fg); }
+  .speed-control button.active { background: var(--accent); color: #fff; }
+  .stats-pill { font-family: var(--mono); }
+  .day-banner {
+    background: var(--bg-2); border-bottom: 1px solid var(--line);
+    padding: 8px 18px; display: flex; align-items: center; gap: 12px;
+    font-size: 12px; color: var(--fg-dim);
+    transition: background 280ms ease;
+  }
+  .day-banner .d {
+    font-family: var(--mono); font-size: 11px;
+    background: var(--accent-soft); color: var(--accent);
+    padding: 2px 8px; border-radius: 4px; font-weight: 600;
+  }
+  .day-banner .t { color: var(--fg); font-weight: 600; }
+  .day-banner.flash { animation: dayflash 1s ease; }
+  @keyframes dayflash {
+    0% { background: var(--accent-soft); }
+    100% { background: var(--bg-2); }
+  }
 
   main { overflow-y: auto; padding: 18px 20px 16px; scroll-behavior: smooth; }
   .stream { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
@@ -223,23 +249,33 @@
 <header>
   <div class="logo">C</div>
   <div>
-    <div class="title">stack — faithful demo <span class="sub">(real pipeline · real fixture)</span></div>
+    <div class="title">stack — faithful demo <span class="sub">(real pipeline · real fixture · 3 days of work)</span></div>
   </div>
   <div class="spacer"></div>
-  <span class="pill" id="counter">0 committed · 0 activity</span>
+  <div class="speed-control" id="speed-control">
+    <button data-speed="1">1×</button>
+    <button data-speed="2" class="active">2×</button>
+    <button data-speed="4">4×</button>
+    <button data-speed="0">skip</button>
+  </div>
+  <span class="pill stats-pill" id="counter">raw 0 · committed 0 · folded 0</span>
   <span class="pill live" id="status">replaying</span>
 </header>
 
 <div class="banner">
   <div>
-    This page runs the <b>actual stack pipeline</b> (the same code as
-    <code>stack/src/pipeline/*.mjs</code>) against the <b>actual fixture</b>
-    (<code>stack/fixtures/habits-day1.jsonl</code>), entirely in-browser.
-    Watch how editorial judgment thins ~22 raw events down to a small
-    handful of committed components — the rest fold into the activity
-    indicator below.
+    This page runs the <b>actual stack pipeline</b> against a <b>3-day
+    fixture</b> (~100 raw events). Watch the counter: most events fold
+    into the activity indicator below; only deliverables, decisions, and
+    state changes earn a place on the page. <b>That ratio is the editorial
+    behaviour the philosophy asks for.</b>
   </div>
   <button id="restart">Restart</button>
+</div>
+
+<div class="day-banner" id="day-banner">
+  <span class="d" id="day-num">Day 1</span>
+  <span class="t" id="day-title">Foundation</span>
 </div>
 
 <main id="main"><div class="stream" id="stream"></div></main>
@@ -261,31 +297,125 @@
 
 <script type="module">
 /* ============================================================
-   FIXTURE — verbatim from stack/fixtures/habits-day1.jsonl
+   FIXTURE — 3 days of building a habit-tracker, ~100 events.
+   Custom keys (not from stream-json): `_pace` (ms before this event),
+   `_day` (sets the day banner). Everything else is shaped exactly as
+   `claude -p --output-format stream-json` would emit it.
    ============================================================ */
+const PLAN_ITEMS = [
+  "Pick storage layer", "Define data model & schema", "Build database wrapper",
+  "Build HabitCard component", "Add streak logic", "Add streak-bump animation",
+  "Add theme system (light/dark)", "Add daily reminder notifications",
+  "Wire CI/CD", "Deploy to production",
+];
+function plan(statuses) {
+  return PLAN_ITEMS.map((content, i) => ({ content, status: statuses[i] || "pending" }));
+}
+
 const FIXTURE = [
-  {"_pace":200,"type":"system","subtype":"init","session_id":"replay-001"},
-  {"_pace":600,"type":"user","message":{"content":[{"type":"text","text":"I want to build a habit tracker web app. React + something local for storage. Help me plan it."}]}},
-  {"_pace":900,"type":"assistant","message":{"content":[{"type":"text","text":"I'll plan the work as a checklist and then start on the storage layer."}]}},
-  {"_pace":500,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_plan_1","name":"TodoWrite","input":{"todos":[{"content":"Pick storage layer","status":"in_progress"},{"content":"Sketch 3 home-screen directions","status":"pending"},{"content":"Define data model & schema","status":"pending"},{"content":"Build HabitCard component","status":"pending"},{"content":"Add streak counter with animation","status":"pending"},{"content":"Run tests and iterate","status":"pending"}]}}]}},
-  {"_pace":300,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_plan_1","content":"ok"}]}},
-  {"_pace":900,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_grep_1","name":"Grep","input":{"pattern":"localStorage|IndexedDB|Dexie","path":"."}}]}},
-  {"_pace":700,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_grep_1","content":"(no existing references — this is a greenfield project)"}]}},
-  {"_pace":900,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_read_1","name":"Read","input":{"file_path":"package.json"}}]}},
-  {"_pace":500,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_read_1","content":"{\"name\":\"habits\",\"version\":\"0.0.0\"}"}]}},
-  {"_pace":900,"type":"assistant","message":{"content":[{"type":"text","text":"For storage I have three reasonable options:\n1) localStorage — trivial setup, ~5 MB cap, not queryable, fine for a v0.\n2) IndexedDB (via Dexie) — small lib, GBs capacity, full query support, supports migrations. Best balance for a habit tracker.\n3) SQLite-wasm — full SQL, GBs, but heavy bundle and overkill for our shape.\n\nWhich do you prefer?"}]}},
-  {"_pace":2400,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_write_1","name":"Write","input":{"file_path":"src/db/schema.ts","content":"import Dexie, { Table } from 'dexie';\n\nexport interface Habit { id: string; name: string; createdAt: number }\nexport interface CheckIn { id: string; habitId: string; date: string }\n\nexport class HabitsDB extends Dexie {\n  habits!: Table<Habit, string>;\n  checkIns!: Table<CheckIn, string>;\n\n  constructor() {\n    super('habits');\n    this.version(1).stores({\n      habits: 'id, name, createdAt',\n      checkIns: 'id, habitId, date',\n    });\n  }\n}\n\nexport const db = new HabitsDB();"}}]}},
-  {"_pace":400,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_write_1","content":"wrote 21 lines"}]}},
-  {"_pace":700,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_plan_2","name":"TodoWrite","input":{"todos":[{"content":"Pick storage layer","status":"completed"},{"content":"Sketch 3 home-screen directions","status":"pending"},{"content":"Define data model & schema","status":"completed"},{"content":"Build HabitCard component","status":"in_progress"},{"content":"Add streak counter with animation","status":"pending"},{"content":"Run tests and iterate","status":"pending"}]}}]}},
-  {"_pace":300,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_plan_2","content":"ok"}]}},
-  {"_pace":900,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_write_2","name":"Write","input":{"file_path":"src/components/HabitCard.tsx","content":"import { useState } from 'react';\nimport { useHabit } from '../hooks/useHabit';\n\nexport function HabitCard({ habitId }: { habitId: string }) {\n  const { habit, streak, checkIn } = useHabit(habitId);\n  const [bumped, setBumped] = useState(false);\n\n  return (\n    <div className=\"habit-card\">\n      <div className=\"name\">{habit.name}</div>\n      <div className={`streak ${bumped ? 'bumped' : ''}`}>\n        {streak.current} day streak\n      </div>\n      <button onClick={async () => { await checkIn(); setBumped(true); }}>\n        I did it today\n      </button>\n    </div>\n  );\n}"}}]}},
-  {"_pace":600,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_write_2","content":"wrote 17 lines"}]}},
-  {"_pace":600,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_bash_1","name":"Bash","input":{"command":"npm test --silent"}}]}},
-  {"_pace":900,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_bash_1","content":"Test Files  2 passed (2)\nTests       7 passed (7)\nDuration    412ms"}]}},
-  {"_pace":700,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_plan_3","name":"TodoWrite","input":{"todos":[{"content":"Pick storage layer","status":"completed"},{"content":"Sketch 3 home-screen directions","status":"pending"},{"content":"Define data model & schema","status":"completed"},{"content":"Build HabitCard component","status":"completed"},{"content":"Add streak counter with animation","status":"in_progress"},{"content":"Run tests and iterate","status":"pending"}]}}]}},
-  {"_pace":300,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_plan_3","content":"ok"}]}},
-  {"_pace":900,"type":"assistant","message":{"content":[{"type":"text","text":"Done for now — schema, HabitCard, and tests are green. Pick a storage answer above and I'll continue with the streak animation."}]}},
-  {"_pace":300,"type":"result","subtype":"success","session_id":"replay-001"},
+  /* ============ DAY 1 — Foundation ============ */
+  {_pace:200, _day:1, _dayTitle:"Foundation", type:"system", subtype:"init", session_id:"replay-3day"},
+  {_pace:300, type:"user", message:{content:[{type:"text", text:"I want to build a habit tracker web app. Production-grade. React + TypeScript. Start with a plan."}]}},
+  {_pace:700, type:"assistant", message:{content:[{type:"text", text:"I'll lay out a checklist and work through it."}]}},
+  {_pace:400, type:"assistant", message:{content:[{type:"tool_use", id:"tu_plan_1", name:"TodoWrite", input:{todos:plan(["in_progress","pending","pending","pending","pending","pending","pending","pending","pending","pending"])}}]}},
+  {_pace:300, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_plan_1", content:"ok"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_glob_1", name:"Glob", input:{pattern:"src/**/*.ts"}}]}},
+  {_pace:350, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_glob_1", content:"(no matches — greenfield)"}]}},
+  {_pace:450, type:"assistant", message:{content:[{type:"tool_use", id:"tu_r_pkg", name:"Read", input:{file_path:"package.json"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_r_pkg", content:"{\"name\":\"habits\",\"type\":\"module\",\"dependencies\":{\"react\":\"^18.2.0\",\"react-dom\":\"^18.2.0\"}}"}]}},
+  {_pace:400, type:"assistant", message:{content:[{type:"tool_use", id:"tu_r_ts", name:"Read", input:{file_path:"tsconfig.json"}}]}},
+  {_pace:350, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_r_ts", content:"{\"compilerOptions\":{\"target\":\"ES2022\",\"jsx\":\"react-jsx\",\"moduleResolution\":\"bundler\"}}"}]}},
+  {_pace:400, type:"assistant", message:{content:[{type:"tool_use", id:"tu_grep_dex", name:"Grep", input:{pattern:"dexie|localStorage|IndexedDB", path:"."}}]}},
+  {_pace:350, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_grep_dex", content:"(no matches)"}]}},
+  {_pace:800, type:"assistant", message:{content:[{type:"text", text:"For storage I have three options:\n1) localStorage — trivial setup, 5MB cap, not queryable, fine for a v0.\n2) IndexedDB (via Dexie) — small lib, GBs capacity, full query support, migrations supported. Best balance.\n3) SQLite-wasm — full SQL, GBs, but heavy bundle and overkill for this shape.\n\nWhich do you prefer?"}]}},
+  {_pace:1200, type:"assistant", message:{content:[{type:"tool_use", id:"tu_w_schema", name:"Write", input:{file_path:"src/db/schema.ts", content:"import Dexie, { Table } from 'dexie';\n\nexport interface Habit { id: string; name: string; createdAt: number; frequency: 'daily' | 'weekly' }\nexport interface CheckIn { id: string; habitId: string; date: string; frozen?: boolean }\n\nexport class HabitsDB extends Dexie {\n  habits!: Table<Habit, string>;\n  checkIns!: Table<CheckIn, string>;\n\n  constructor() {\n    super('habits');\n    this.version(1).stores({\n      habits: 'id, name, createdAt',\n      checkIns: 'id, habitId, date',\n    });\n  }\n}\n\nexport const db = new HabitsDB();"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_w_schema", content:"wrote 23 lines"}]}},
+  {_pace:450, type:"assistant", message:{content:[{type:"tool_use", id:"tu_w_db", name:"Write", input:{file_path:"src/db/index.ts", content:"export { db, type Habit, type CheckIn } from './schema';\n\nexport async function addHabit(name: string): Promise<string> {\n  const id = crypto.randomUUID();\n  await db.habits.add({ id, name, createdAt: Date.now(), frequency: 'daily' });\n  return id;\n}\n\nexport async function checkIn(habitId: string): Promise<void> {\n  const date = new Date().toISOString().slice(0, 10);\n  await db.checkIns.add({ id: crypto.randomUUID(), habitId, date });\n}"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_w_db", content:"wrote 13 lines"}]}},
+  {_pace:450, type:"assistant", message:{content:[{type:"tool_use", id:"tu_plan_2", name:"TodoWrite", input:{todos:plan(["completed","completed","completed","in_progress","pending","pending","pending","pending","pending","pending"])}}]}},
+  {_pace:300, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_plan_2", content:"ok"}]}},
+  {_pace:400, type:"assistant", message:{content:[{type:"tool_use", id:"tu_glob_c", name:"Glob", input:{pattern:"src/components/*"}}]}},
+  {_pace:300, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_glob_c", content:"(none)"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_w_hook", name:"Write", input:{file_path:"src/hooks/useHabit.ts", content:"import { useLiveQuery } from 'dexie-react-hooks';\nimport { db } from '../db';\n\nexport function useHabit(habitId: string) {\n  const habit = useLiveQuery(() => db.habits.get(habitId), [habitId]);\n  const checkIns = useLiveQuery(\n    () => db.checkIns.where({ habitId }).reverse().toArray(),\n    [habitId]\n  ) ?? [];\n\n  const streak = computeStreak(checkIns);\n  return { habit, streak };\n}\n\nfunction computeStreak(rows: CheckIn[]) {\n  // naive: gap > 1 day resets the streak. (We'll fix this on Day 2.)\n  let current = 0;\n  return { current, longest: 0 };\n}"}}]}},
+  {_pace:450, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_w_hook", content:"wrote 19 lines"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_w_card", name:"Write", input:{file_path:"src/components/HabitCard.tsx", content:"import { useState } from 'react';\nimport { useHabit } from '../hooks/useHabit';\n\nexport function HabitCard({ habitId }: { habitId: string }) {\n  const { habit, streak, checkIn } = useHabit(habitId);\n  const [bumped, setBumped] = useState(false);\n\n  return (\n    <div className=\"habit-card\">\n      <div className=\"name\">{habit?.name}</div>\n      <div className={`streak ${bumped ? 'bumped' : ''}`}>\n        {streak.current} day streak\n      </div>\n      <button onClick={async () => { await checkIn(); setBumped(true); }}>\n        I did it today\n      </button>\n    </div>\n  );\n}"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_w_card", content:"wrote 17 lines"}]}},
+  {_pace:450, type:"assistant", message:{content:[{type:"tool_use", id:"tu_plan_3", name:"TodoWrite", input:{todos:plan(["completed","completed","completed","completed","in_progress","pending","pending","pending","pending","pending"])}}]}},
+  {_pace:300, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_plan_3", content:"ok"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_bash_t1", name:"Bash", input:{command:"npm test --silent"}}]}},
+  {_pace:700, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_bash_t1", content:"Test Files  2 passed (2)\nTests       3 passed (3)\nDuration    389ms"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"text", text:"Done for day 1. Schema, db wrapper, hook and HabitCard all in place; 3 tests green."}]}},
+
+  /* ============ DAY 2 — Iteration ============ */
+  {_pace:1400, _day:2, _dayTitle:"Iteration", type:"user", message:{content:[{type:"text", text:"There's a bug — when you skip a day, the streak resets to 0 instead of pausing. Find and fix it."}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"text", text:"Let me investigate."}]}},
+  {_pace:400, type:"assistant", message:{content:[{type:"tool_use", id:"tu_g_streak", name:"Grep", input:{pattern:"streak", path:"src"}}]}},
+  {_pace:450, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_g_streak", content:"src/hooks/useHabit.ts:8:  const streak = computeStreak(checkIns);\nsrc/hooks/useHabit.ts:14:function computeStreak(rows: CheckIn[]) {\nsrc/components/HabitCard.tsx:9:        {streak.current} day streak"}]}},
+  {_pace:400, type:"assistant", message:{content:[{type:"tool_use", id:"tu_r_hook2", name:"Read", input:{file_path:"src/hooks/useHabit.ts"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_r_hook2", content:"…"}]}},
+  {_pace:400, type:"assistant", message:{content:[{type:"tool_use", id:"tu_r_card2", name:"Read", input:{file_path:"src/components/HabitCard.tsx"}}]}},
+  {_pace:350, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_r_card2", content:"…"}]}},
+  {_pace:450, type:"assistant", message:{content:[{type:"tool_use", id:"tu_g_gap", name:"Grep", input:{pattern:"gap > 1|resets", path:"src"}}]}},
+  {_pace:350, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_g_gap", content:"src/hooks/useHabit.ts:18:  // naive: gap > 1 day resets the streak."}]}},
+  {_pace:600, type:"assistant", message:{content:[{type:"tool_use", id:"tu_e_fix", name:"Edit", input:{file_path:"src/hooks/useHabit.ts", old_string:"function computeStreak(rows: CheckIn[]) {\n  // naive: gap > 1 day resets the streak. (We'll fix this on Day 2.)\n  let current = 0;\n  return { current, longest: 0 };\n}", new_string:"function computeStreak(rows: CheckIn[]) {\n  let current = 0, longest = 0, prev: string | null = null;\n  for (const r of rows.slice().reverse()) {\n    const gap = prev ? daysBetween(prev, r.date) : 0;\n    if (gap === 0) continue;\n    if (gap === 1) current += 1;\n    else if (gap === 2) { /* grace day — pause, don't reset */ }\n    else current = 1;\n    longest = Math.max(longest, current);\n    prev = r.date;\n  }\n  return { current, longest };\n}\n\nfunction daysBetween(a: string, b: string) {\n  const ms = new Date(b).getTime() - new Date(a).getTime();\n  return Math.round(ms / 86400000);\n}"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_e_fix", content:"ok"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_bash_t2", name:"Bash", input:{command:"npm test --silent"}}]}},
+  {_pace:800, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_bash_t2", content:"Test Files  2 passed (2)\nTests       5 passed (5)\nDuration    421ms\n+ 2 new tests passing"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"text", text:"Fixed. Streak now pauses on a 1-day gap and only resets after 2+."}]}},
+
+  {_pace:1300, type:"user", message:{content:[{type:"text", text:"Now add a 'streak freeze' feature so users can take a planned day off."}]}},
+  {_pace:800, type:"assistant", message:{content:[{type:"text", text:"Two ways to handle it:\n1) Auto grace — every 7th missed day is free, no UI needed.\n2) Manual freeze — user taps a freeze button before midnight. Limited per month.\nWhich do you prefer?"}]}},
+  {_pace:1200, type:"assistant", message:{content:[{type:"tool_use", id:"tu_r_hook3", name:"Read", input:{file_path:"src/hooks/useHabit.ts"}}]}},
+  {_pace:350, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_r_hook3", content:"…"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_e_freeze", name:"Edit", input:{file_path:"src/hooks/useHabit.ts", old_string:"return { current, longest };\n}", new_string:"return { current, longest };\n}\n\nexport async function freezeStreak(habitId: string): Promise<void> {\n  const today = new Date().toISOString().slice(0, 10);\n  await db.checkIns.add({ id: crypto.randomUUID(), habitId, date: today, frozen: true });\n}"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_e_freeze", content:"ok"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_w_freezebtn", name:"Write", input:{file_path:"src/components/FreezeButton.tsx", content:"import { freezeStreak } from '../hooks/useHabit';\n\nexport function FreezeButton({ habitId }: { habitId: string }) {\n  return (\n    <button\n      onClick={() => freezeStreak(habitId)}\n      className=\"freeze-btn\"\n      title=\"Use a streak freeze today\"\n    >\n      ❄ Freeze today\n    </button>\n  );\n}"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_w_freezebtn", content:"wrote 11 lines"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_bash_t3", name:"Bash", input:{command:"npm test --silent"}}]}},
+  {_pace:800, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_bash_t3", content:"Test Files  2 passed (2)\nTests       7 passed (7)\nDuration    458ms"}]}},
+
+  {_pace:1300, type:"user", message:{content:[{type:"text", text:"Also add a dark mode toggle."}]}},
+  {_pace:450, type:"assistant", message:{content:[{type:"tool_use", id:"tu_r_app", name:"Read", input:{file_path:"src/App.tsx"}}]}},
+  {_pace:350, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_r_app", content:"…"}]}},
+  {_pace:400, type:"assistant", message:{content:[{type:"tool_use", id:"tu_r_css", name:"Read", input:{file_path:"src/index.css"}}]}},
+  {_pace:350, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_r_css", content:"…"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_w_theme", name:"Write", input:{file_path:"src/hooks/useTheme.ts", content:"import { useEffect, useState } from 'react';\n\ntype Theme = 'light' | 'dark' | 'auto';\n\nexport function useTheme() {\n  const [theme, setTheme] = useState<Theme>(\n    (localStorage.getItem('theme') as Theme) ?? 'auto'\n  );\n  useEffect(() => {\n    const resolved = theme === 'auto'\n      ? matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'\n      : theme;\n    document.documentElement.dataset.theme = resolved;\n    localStorage.setItem('theme', theme);\n  }, [theme]);\n  return { theme, setTheme };\n}"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_w_theme", content:"wrote 17 lines"}]}},
+  {_pace:450, type:"assistant", message:{content:[{type:"tool_use", id:"tu_e_app", name:"Edit", input:{file_path:"src/App.tsx", old_string:"function App() {\n  return <Home />;", new_string:"function App() {\n  useTheme();\n  return <Home />;"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_e_app", content:"ok"}]}},
+  {_pace:450, type:"assistant", message:{content:[{type:"tool_use", id:"tu_plan_4", name:"TodoWrite", input:{todos:plan(["completed","completed","completed","completed","completed","pending","completed","in_progress","pending","pending"])}}]}},
+  {_pace:300, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_plan_4", content:"ok"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"text", text:"Done for day 2 — bug fixed, freeze feature live, dark mode toggles cleanly."}]}},
+
+  /* ============ DAY 3 — Ship ============ */
+  {_pace:1500, _day:3, _dayTitle:"Ship", type:"user", message:{content:[{type:"text", text:"Last day: add daily reminder notifications and deploy to production."}]}},
+  {_pace:800, type:"assistant", message:{content:[{type:"text", text:"For notification channels I see three options:\n1) Web Push — VAPID + service worker. Free, works on desktop and mobile (not iOS Safari).\n2) Email reminders via Resend. Universal. ~$0.001/email.\n3) SMS via Twilio. Highest engagement, ~$0.0075/msg.\n\nWhich do you prefer?"}]}},
+  {_pace:1500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_websearch", name:"WebSearch", input:{query:"VAPID Web Push subscribe 2026 service worker"}}]}},
+  {_pace:900, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_websearch", content:"(5 results on Push API, VAPID key gen, browser compat)"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_wf_overview", name:"WebFetch", input:{url:"https://web.dev/articles/push-notifications-overview", prompt:"Summarize VAPID + subscription flow"}}]}},
+  {_pace:900, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_wf_overview", content:"(article summary)"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_w_notif", name:"Write", input:{file_path:"src/notifications.ts", content:"const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC;\n\nexport async function subscribeToReminders(): Promise<PushSubscription> {\n  if (!('serviceWorker' in navigator)) throw new Error('Service worker not supported');\n  const reg = await navigator.serviceWorker.register('/sw.js');\n  const existing = await reg.pushManager.getSubscription();\n  if (existing) return existing;\n  return reg.pushManager.subscribe({\n    userVisibleOnly: true,\n    applicationServerKey: VAPID_PUBLIC,\n  });\n}\n\nexport async function scheduleDailyReminder(habitId: string, hour: number) {\n  await fetch('/api/reminders', {\n    method: 'POST',\n    body: JSON.stringify({ habitId, hour }),\n  });\n}"}}]}},
+  {_pace:450, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_w_notif", content:"wrote 21 lines"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_w_sw", name:"Write", input:{file_path:"public/sw.js", content:"self.addEventListener('push', (event) => {\n  const data = event.data?.json() ?? {};\n  event.waitUntil(self.registration.showNotification(\n    data.title ?? 'Habit reminder',\n    { body: data.body, icon: '/icon.png', tag: data.habitId }\n  ));\n});\n\nself.addEventListener('notificationclick', (event) => {\n  event.notification.close();\n  event.waitUntil(clients.openWindow('/'));\n});"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_w_sw", content:"wrote 12 lines"}]}},
+  {_pace:450, type:"assistant", message:{content:[{type:"tool_use", id:"tu_e_app_notif", name:"Edit", input:{file_path:"src/App.tsx", old_string:"function App() {\n  useTheme();\n  return <Home />;", new_string:"function App() {\n  useTheme();\n  useEffect(() => { subscribeToReminders().catch(console.warn); }, []);\n  return <Home />;"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_e_app_notif", content:"ok"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_task_ci", name:"Task", input:{description:"Set up CI for npm test + auto-deploy main to Vercel", subagent_type:"general-purpose"}}]}},
+  {_pace:1800, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_task_ci", content:"Drafted .github/workflows/ci.yml with test + build + deploy steps. VERCEL_TOKEN must be added to repo secrets."}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_w_ci", name:"Write", input:{file_path:".github/workflows/ci.yml", content:"name: ci\non:\n  push:\n    branches: [main]\n  pull_request:\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with: { node-version: 20 }\n      - run: npm ci\n      - run: npm test\n      - run: npm run build\n  deploy:\n    needs: test\n    if: github.ref == 'refs/heads/main'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}"}}]}},
+  {_pace:400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_w_ci", content:"wrote 22 lines"}]}},
+  {_pace:450, type:"assistant", message:{content:[{type:"tool_use", id:"tu_plan_5", name:"TodoWrite", input:{todos:plan(["completed","completed","completed","completed","completed","completed","completed","completed","in_progress","pending"])}}]}},
+  {_pace:300, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_plan_5", content:"ok"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_bash_t4", name:"Bash", input:{command:"npm test --silent"}}]}},
+  {_pace:900, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_bash_t4", content:"Test Files  4 passed (4)\nTests       11 passed (11)\nDuration    612ms"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_bash_build", name:"Bash", input:{command:"npm run build"}}]}},
+  {_pace:1100, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_bash_build", content:"vite build\n  ✓ 142 modules transformed.\n  dist/index.html                  0.46 kB\n  dist/assets/index-D3a-d.css      8.21 kB\n  dist/assets/index-7f3kQ.js      82.14 kB\n  ✓ built in 1.31s"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_bash_dep", name:"Bash", input:{command:"npx vercel deploy --prod"}}]}},
+  {_pace:1400, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_bash_dep", content:"Vercel CLI 33.0.0\n  Inspect: https://vercel.com/ido/habits/9f3a2b\n  Production: https://habits.app [2s]"}]}},
+  {_pace:500, type:"assistant", message:{content:[{type:"tool_use", id:"tu_plan_6", name:"TodoWrite", input:{todos:plan(Array(10).fill("completed"))}}]}},
+  {_pace:300, type:"user", message:{content:[{type:"tool_result", tool_use_id:"tu_plan_6", content:"ok"}]}},
+  {_pace:700, type:"assistant", message:{content:[{type:"text", text:"Shipped to habits.app. All 10 plan items complete. 11/11 tests green, 82 kB bundle. Done."}]}},
+  {_pace:300, type:"result", subtype:"success", session_id:"replay-3day"},
 ];
 
 /* ============================================================
@@ -547,6 +677,7 @@ const stream = $("#stream");
 const counterEl = $("#counter");
 let activityCount = 0;
 let commitCount = 0;
+let rawCount = 0;
 
 function header(icon, kind, name, meta) {
   return el("div", { class: "c-head" },
@@ -665,7 +796,8 @@ function apply(m) {
 const fallback = { mount: (c) => el("div", { class: "component" }, header("?", c.type || "unknown", "(no renderer)"), el("pre", { class: "term" }, JSON.stringify(c.props, null, 2))) };
 
 function updateCounter() {
-  counterEl.textContent = `${commitCount} committed · ${activityCount} activity`;
+  const folded = activityCount;  // events that produced only activity updates
+  counterEl.textContent = `raw ${rawCount} · committed ${commitCount} · folded ${folded}`;
 }
 
 /* activity */
@@ -726,28 +858,96 @@ function autoscroll() {
    ============================================================ */
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+let speedDivisor = 2;
+let cancelToken = { cancelled: false };
+
+$$("#speed-control button").forEach(b => b.addEventListener("click", () => {
+  $$("#speed-control button").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  speedDivisor = parseFloat(b.dataset.speed);
+}));
+
+function setDayBanner(num, title) {
+  const banner = $("#day-banner");
+  $("#day-num").textContent = "Day " + num;
+  $("#day-title").textContent = title || "";
+  banner.classList.remove("flash");
+  void banner.offsetWidth;
+  banner.classList.add("flash");
+}
+
 async function runReplay() {
   // reset
+  cancelToken.cancelled = true;
+  cancelToken = { cancelled: false };
+  const token = cancelToken;
   resetIds();
   stream.innerHTML = "";
   components.clear();
-  activityCount = 0; commitCount = 0; updateCounter();
+  activityCount = 0; commitCount = 0; rawCount = 0; updateCounter();
   $("#status").textContent = "replaying";
   $("#status").classList.add("live");
+  setDayBanner(1, "Foundation");
 
   const pipelineState = {};
+  const startTs = performance.now();
+
   for (const raw of FIXTURE) {
+    if (token.cancelled) return;
+
     const pace = raw._pace ?? 350;
-    const clean = { ...raw }; delete clean._pace;
-    for (const ev of normalize(clean)) {
+    const clean = { ...raw };
+    delete clean._pace;
+    const dayMark = clean._day;
+    const dayTitle = clean._dayTitle;
+    delete clean._day; delete clean._dayTitle;
+
+    if (dayMark != null && dayMark !== 1) {
+      setDayBanner(dayMark, dayTitle);
+    }
+
+    const events = normalize(clean);
+    rawCount += events.length;
+
+    for (const ev of events) {
       const a = prefilter(ev, pipelineState);
       const b = editorialAgentRules([ev], pipelineState);
       for (const m of [...a, ...b]) apply(m);
     }
-    await sleep(pace);
+    updateCounter();
+
+    if (speedDivisor > 0) await sleep(pace / speedDivisor);
   }
-  $("#status").textContent = "idle";
+
+  // Final summary card
+  const elapsed = Math.round((performance.now() - startTs) / 1000);
+  const ratio = rawCount > 0 ? Math.round((commitCount / rawCount) * 100) : 0;
+  const summary = el("div", { class: "component summary" },
+    header("✓", "summary", "Session complete", `${elapsed}s · ${ratio}% surfaced`),
+    el("div", { class: "c-body" },
+      el("div", { style: "display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;" },
+        statBox("raw events", rawCount, "everything the agent emitted"),
+        statBox("committed", commitCount, "components on the page"),
+        statBox("folded", rawCount - commitCount, "absorbed into activity"),
+      ),
+      el("div", { style: "margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); color: var(--fg-dim); font-size: 12.5px; line-height: 1.55;" },
+        "That ratio is the editorial behaviour: " + (rawCount - commitCount) + " events of internal scaffolding (file reads, intermediate searches, TodoWrite acks, draft-reply ticks) folded into the activity indicator. " + commitCount + " earned the surface — the prompts, the plan (patched in place 6 times across the 3 days), the 3 decisions, the diffs, the test/build/deploy terminals, and a few summary notes.",
+      ),
+    )
+  );
+  stream.append(summary);
+  autoscroll();
+
+  $("#status").textContent = "idle · " + ratio + "% surfaced";
   $("#status").classList.remove("live");
+}
+
+function statBox(label, value, note) {
+  return el("div", { style: "background: var(--bg-3); border-radius: 8px; padding: 10px 12px; text-align: center;" },
+    el("div", { style: "color: var(--fg-mute); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em;" }, label),
+    el("div", { style: "font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 4px 0;" }, String(value)),
+    el("div", { style: "color: var(--fg-dim); font-size: 11px;" }, note),
+  );
 }
 
 $("#restart").addEventListener("click", runReplay);

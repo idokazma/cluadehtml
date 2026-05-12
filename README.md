@@ -55,11 +55,12 @@ stacked into a single page that grows as the session goes.
 - **[`stack-replay.html`](./stack-replay.html)** — **faithful demo**, made
   after the code was written. Runs the **actual stack pipeline** (the
   same `normalize` + `prefilter` + `editorialAgentRules` from
-  `stack/src/`) against the **actual fixture** (`stack/fixtures/habits-day1.jsonl`),
-  inlined into a single self-contained file. What you see is exactly
-  what `node bin/stack.mjs run --replay …` produces — including the
-  editorial behavior: most of the 22 raw events fold into the activity
-  indicator at the bottom; only ~8 commit as visible components.
+  `stack/src/`) against a **3-day fixture** (~96 raw events), all
+  inlined into a single self-contained file. Speed control (1×/2×/4×/skip)
+  and a live counter showing `raw N · committed M · folded K`. Ends
+  with a summary card. The editorial ratio is dramatic: 96 raw events
+  thin down to ~34 committed components (~35% surfaced); the rest
+  fold into the activity indicator.
 
 - **[`project.html`](./project.html)** — separate exploration of what a
   project landing page might look like (cards for "where you left off",

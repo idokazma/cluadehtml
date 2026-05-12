@@ -18,7 +18,8 @@ No dependencies. Requires Node 20+.
 **Replay a fixture** (works without a real `claude` install):
 
 ```sh
-node bin/stack.mjs run --replay fixtures/habits-day1.jsonl
+node bin/stack.mjs run --replay fixtures/habits-day1.jsonl   # short (~17s)
+node bin/stack.mjs run --replay fixtures/habits-3day.jsonl   # long (~75s)
 ```
 
 Open `http://localhost:3737/` in your browser. The simulated session
