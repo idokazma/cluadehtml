@@ -693,6 +693,122 @@ Things that get cheap once the foundation is in place:
   fixed model + temperature 0 and golden-master the descriptor
   stream rather than the final HTML.
 
+## Self-review — what I've hand-waved
+
+A list of the things I've glossed over, ranked by how much they'd bite
+us during real implementation. None are showstoppers; all need a real
+answer before Phase 2.
+
+### 1. *"Settled chunk"* is the most important undefined term
+
+The editorial agent runs "on each settled chunk." But when *is* a chunk
+settled? Per assistant turn? Per content block? Per tool_use + result
+pair? Per N seconds? This single decision drives latency, cost, and the
+feel of the entire UX — and I never pinned it down. **Best default:**
+fire after every `assistant` turn boundary, plus a soft deadline (~3 s)
+that promotes the in-flight chunk to a partial decision so very long
+turns don't go blank. This needs a real experiment in the Phase 0 spike.
+
+### 2. The editorial agent's context window isn't specified
+
+It needs to know more than the current chunk to make good calls. To
+decide *"is this Read exploratory or the answer the user asked for?"*
+it needs the user's prompt and the agent's recent activity. How much
+history? All of it? The last 5 chunks? Token cost scales linearly with
+this. Probably: prompt + last 2k tokens of activity summary, with the
+fixed vocabulary in a cached prefix.
+
+### 3. Long-running detection is backwards
+
+The prefilter is supposed to "auto-commit long-running Bash" so the
+user sees progress. You can't know in advance. The real flow is: every
+Bash starts as an activity-indicator line; if it's still running after
+~1.5 s or starts producing output, *promote* it to a live `terminal`
+component. Component promotion (activity → committed) is a primitive I
+haven't called out explicitly anywhere in the plan; it should be.
+
+### 4. Activity events shouldn't live in the events.jsonl
+
+Activity-indicator updates are transient by definition. Persisting them
+in the append-only log makes replay noisy and bloats sessions. They
+should be ephemeral — live channel only. Only *committed* mutations
+(append/patch/stream/finalize on real components) go in the log. The
+log's invariant becomes: **fold the log → final committed state of the
+page**, with activity indicator empty (because the session is no longer
+live). That's the right shape.
+
+### 5. User actions can go stale mid-turn
+
+Queue semantics solve "don't interrupt the agent". They don't solve
+"the user's click is no longer relevant by the time we process it".
+Example: user picks an option on `@dec-7`, but the agent has already
+moved on and resolved that decision via tool calls. We need either:
+- a freshness check (the server checks whether `@dec-7` is still "open"
+  before synthesizing the user message), or
+- a clearly-marked staleness in the synthesized message
+  ("the user picked option 2 of @dec-7 ~30 s ago; you may have already
+  resolved this — confirm or proceed").
+
+### 6. The interface agent's prompt is the most important artifact, and I haven't sketched it
+
+I've said "vocabulary + criteria in the system prompt" five times
+without ever writing it. This is the *only* concrete deliverable
+that decides whether the whole design works. The Phase 0 spike should
+include drafting and iterating on this prompt against transcripts of
+real sessions before we build anything else.
+
+### 7. The demo doesn't represent post-editorial reality
+
+`demo.html` shows ~22 carefully-chosen committed components across 3
+days. A real session would be ~80% activity-indicator updates with
+occasional commits. The current demo is a curated *best-case* view —
+fine as an aspirational mockup, misleading as a representation of
+what a real session looks like. Worth either updating the demo to
+include the activity indicator between commits, or labeling it as
+"the surfaced view" with a toggle to expand the noise.
+
+### 8. The project page hasn't been re-thought with the editorial lens
+
+`project.html` renders every section unconditionally. By the new
+philosophy, it should probably also have a "what's worth surfacing"
+filter — there's no value in showing an empty "needs attention"
+section, or a stale concept map that hasn't changed since last week.
+A small editorial pass on project assembly seems right.
+
+### 9. `snapshot.html` for sharing has an interactivity problem
+
+A self-contained snapshot can't have working playground sliders or
+decision buttons by default — those need handlers wired to a server.
+Two options: (a) snapshots are explicitly *frozen* — sliders show the
+last-set state, decisions show the picked option, but nothing's
+clickable; (b) snapshots include a small embedded runtime that
+re-renders from the embedded event log but no-ops on actions. (a) is
+simpler and probably enough.
+
+### 10. MCP server registration only works in `stack run` mode
+
+Registering `stack-mcp` requires Claude Code to start with that
+config. For `stack attach` (where the user already started `claude`
+themselves), we can't retroactively add MCP tools. So `render_*`
+explicit emission is a `stack run` feature only — which is fine,
+but worth stating.
+
+### The single riskiest assumption
+
+That Haiku 4.5 can make consistent, sensible editorial judgments
+("commit this; fold that") at the rate and quality this design
+requires. If it under-surfaces, users miss things; if it
+over-surfaces, we're back to the noisy log; if it's inconsistent,
+the UX feels jittery — sometimes the bug-fix diff appears, sometimes
+the same kind of edit silently folds into activity. **This needs to
+be tested before Phase 2 is committed to.** The Phase 0 spike should
+be expanded: instead of just printing "would render X," it should
+actually run the candidate editorial-agent prompt against real
+transcripts and have a human grade the calls against the criteria.
+If the grade isn't ≥85% agreement with a human editor, the design
+needs rethinking (different model, different criteria, more
+hand-coded rules, or a smaller leap from the prefilter baseline).
+
 ## What to build first, in one sentence
 
 A **prefilter spike** that pipes `claude -p --output-format stream-json`
