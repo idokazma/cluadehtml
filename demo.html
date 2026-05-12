@@ -2,23 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Claude Code — live session</title>
+<title>Claude Code — building a habit tracker</title>
 <style>
   :root {
     --bg: #0e0f12;
     --bg-2: #15171c;
     --bg-3: #1c1f26;
+    --bg-4: #232730;
     --line: #262a33;
     --line-2: #333845;
     --fg: #e6e7ea;
     --fg-dim: #9097a3;
     --fg-mute: #5b6272;
-    --accent: #d97757;       /* claude orange */
+    --accent: #d97757;
     --accent-soft: #d9775722;
     --green: #5fb87a;
     --red: #e26a6a;
     --yellow: #d6b14a;
     --blue: #6b9fff;
+    --purple: #a78bfa;
+    --pink: #f06292;
     --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
   }
@@ -31,23 +34,15 @@
     font-size: 14px;
     display: grid;
     grid-template-rows: auto 1fr auto;
-    grid-template-columns: 260px 1fr;
-    grid-template-areas:
-      "header header"
-      "side   main"
-      "side   input";
     height: 100vh;
     overflow: hidden;
   }
 
-  /* --- header --- */
+  /* header */
   header {
-    grid-area: header;
     border-bottom: 1px solid var(--line);
-    padding: 10px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
+    padding: 10px 20px;
+    display: flex; align-items: center; gap: 12px;
     background: var(--bg-2);
   }
   .logo {
@@ -68,7 +63,6 @@
   .pill.live::before {
     content: ""; display: inline-block; width: 6px; height: 6px;
     background: var(--green); border-radius: 50%; margin-right: 6px;
-    box-shadow: 0 0 0 0 var(--green);
     animation: pulse 1.6s infinite;
   }
   @keyframes pulse {
@@ -77,105 +71,113 @@
     100% { box-shadow: 0 0 0 0 #5fb87a00; }
   }
 
-  /* --- sidebar --- */
-  aside {
-    grid-area: side;
-    border-right: 1px solid var(--line);
-    background: var(--bg-2);
-    overflow-y: auto;
-    padding: 14px 12px;
+  /* main scroll area */
+  main { overflow-y: auto; padding: 24px 20px 80px; }
+  .stream {
+    max-width: 880px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 22px;
   }
-  aside h3 {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--fg-mute);
-    margin: 14px 6px 6px;
-    font-weight: 600;
-  }
-  .nav-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 8px;
-    border-radius: 6px;
+
+  /* explanatory intro card */
+  .intro {
+    background: linear-gradient(135deg, var(--accent-soft), transparent);
+    border: 1px solid #4a3024;
+    border-radius: 10px;
+    padding: 14px 16px;
     color: var(--fg-dim);
-    cursor: pointer;
+    line-height: 1.5;
     font-size: 13px;
   }
-  .nav-item:hover { background: var(--bg-3); color: var(--fg); }
-  .nav-item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--fg-mute); }
-  .nav-item .dot.green { background: var(--green); }
-  .nav-item .dot.yellow { background: var(--yellow); }
-  .nav-item .dot.red { background: var(--red); }
-  .nav-item .count { margin-left: auto; color: var(--fg-mute); font-size: 11px; font-variant-numeric: tabular-nums; }
-
-  /* --- main: stream of blocks --- */
-  main {
-    grid-area: main;
-    overflow-y: auto;
-    padding: 18px 28px 80px;
-    scroll-behavior: smooth;
+  .intro b { color: var(--fg); }
+  .intro kbd {
+    font-family: var(--mono); font-size: 11px;
+    background: var(--bg-3); padding: 2px 6px; border-radius: 4px;
+    color: var(--fg); border: 1px solid var(--line);
   }
-  .stream { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
 
-  .block {
+  /* a "turn": one user prompt + the components it produced */
+  .turn { display: flex; flex-direction: column; gap: 10px; }
+  .turn-prompt {
+    align-self: flex-end;
+    max-width: 70%;
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    border-radius: 12px 12px 4px 12px;
+    padding: 9px 13px;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--fg);
+    cursor: context-menu;
+  }
+  .turn-prompt:hover { border-color: var(--accent); }
+  .turn-prompt .who {
+    font-size: 10.5px; color: var(--fg-mute);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-bottom: 3px;
+  }
+
+  /* component (the agent's reply, rendered as an interactive widget) */
+  .component {
     background: var(--bg-2);
     border: 1px solid var(--line);
     border-radius: 10px;
     overflow: hidden;
-    transition: border-color 120ms, transform 120ms;
     animation: slidein 220ms ease;
+    transition: border-color 120ms;
+  }
+  .component:hover { border-color: var(--line-2); }
+  .component.flash {
+    animation: flash 800ms ease;
   }
   @keyframes slidein {
-    from { opacity: 0; transform: translateY(4px); }
+    from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-  .block:hover { border-color: var(--line-2); }
-  .block.flash { animation: flash 700ms ease; }
   @keyframes flash {
     0%   { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
     100% { border-color: var(--line); box-shadow: 0 0 0 0 transparent; }
   }
-  .block-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 9px 12px;
+  .component.referenced {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .c-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
     border-bottom: 1px solid var(--line);
-    font-size: 12px;
-    color: var(--fg-dim);
+    font-size: 12px; color: var(--fg-dim);
     background: linear-gradient(to bottom, var(--bg-3), var(--bg-2));
   }
-  .block-header .icon { width: 14px; height: 14px; opacity: 0.8; }
-  .block-header .name { color: var(--fg); font-weight: 500; }
-  .block-header .meta { margin-left: auto; color: var(--fg-mute); font-size: 11px; font-variant-numeric: tabular-nums; }
-  .block-body { padding: 12px 14px; }
+  .c-head .icon { font-size: 14px; }
+  .c-head .kind {
+    font-family: var(--mono); font-size: 10.5px; padding: 1px 6px;
+    border-radius: 3px; background: var(--bg-4); color: var(--fg-dim);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .c-head .name { color: var(--fg); font-weight: 500; }
+  .c-head .meta {
+    margin-left: auto; color: var(--fg-mute); font-size: 11px;
+    font-family: var(--mono);
+  }
+  .c-head .id-tag {
+    font-family: var(--mono); font-size: 10.5px; color: var(--accent);
+    padding: 1px 5px; border-radius: 3px; background: var(--accent-soft);
+  }
+  .c-body { padding: 12px 14px; }
 
-  /* status colors on header */
-  .block.ok    .block-header .icon { color: var(--green); }
-  .block.warn  .block-header .icon { color: var(--yellow); }
-  .block.err   .block-header .icon { color: var(--red); }
-  .block.run   .block-header .icon { color: var(--blue); }
-
-  /* user/assistant message blocks */
-  .msg.user   { background: var(--bg-3); }
-  .msg.user   .block-header .name { color: var(--accent); }
-  .msg .block-body { line-height: 1.55; }
-
-  /* plan block */
-  .plan ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+  /* ------- plan component ------- */
+  .plan ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 3px; }
   .plan li {
-    display: flex; align-items: flex-start; gap: 10px;
-    padding: 6px 8px; border-radius: 6px; cursor: pointer;
-    color: var(--fg);
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 9px; border-radius: 6px; cursor: pointer;
   }
   .plan li:hover { background: var(--bg-3); }
   .plan li.done { color: var(--fg-mute); text-decoration: line-through; }
   .plan li.active { background: var(--bg-3); }
   .plan .check {
     width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--line-2);
-    margin-top: 3px; display: grid; place-items: center; flex-shrink: 0;
+    flex-shrink: 0; display: grid; place-items: center;
   }
   .plan li.done .check { background: var(--green); border-color: var(--green); }
   .plan li.done .check::after { content: "✓"; color: white; font-size: 10px; line-height: 1; }
@@ -185,40 +187,163 @@
     background: var(--accent); animation: pulse 1.6s infinite;
   }
 
-  /* file edit block */
-  .diff { font-family: var(--mono); font-size: 12.5px; line-height: 1.55; }
-  .diff .row { display: flex; padding: 0 8px; white-space: pre; }
-  .diff .gutter { color: var(--fg-mute); width: 36px; text-align: right; padding-right: 10px; user-select: none; }
+  /* ------- comparison table ------- */
+  .compare table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .compare th, .compare td {
+    padding: 8px 10px; text-align: left;
+    border-bottom: 1px solid var(--line);
+  }
+  .compare th {
+    font-weight: 500; color: var(--fg-dim); font-size: 12px;
+    background: var(--bg-3); text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .compare tr:last-child td { border-bottom: 0; }
+  .compare td.opt { font-weight: 600; color: var(--fg); }
+  .compare .v.ok  { color: var(--green); }
+  .compare .v.no  { color: var(--red); }
+  .compare .v.med { color: var(--yellow); }
+  .compare .pick {
+    background: var(--bg-3); border: 1px solid var(--line-2); color: var(--fg);
+    padding: 4px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;
+  }
+  .compare .pick:hover { border-color: var(--accent); color: var(--accent); }
+  .compare tr.picked { background: var(--accent-soft); }
+  .compare tr.picked .pick { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* ------- design exploration grid ------- */
+  .designs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .design {
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+    cursor: pointer; transition: 100ms;
+    background: var(--bg);
+  }
+  .design:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .design.picked { border-color: var(--green); box-shadow: 0 0 0 2px #2c4a3680; }
+  .design .preview {
+    height: 160px; padding: 10px; font-size: 10px;
+    display: flex; flex-direction: column; gap: 6px;
+    position: relative;
+  }
+  .design .label {
+    padding: 6px 10px; border-top: 1px solid var(--line);
+    background: var(--bg-2); display: flex; justify-content: space-between; align-items: center;
+  }
+  .design .label .name { font-weight: 600; font-size: 12px; }
+  .design .label .tag { color: var(--fg-mute); font-size: 11px; }
+  /* mockup styles */
+  .mock-card { background: var(--bg-3); border-radius: 4px; padding: 5px 6px; display: flex; gap: 4px; align-items: center; }
+  .mock-bar { background: var(--bg-3); height: 8px; border-radius: 2px; }
+  .mock-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ------- code component ------- */
+  .code-frame {
+    background: #0a0b0d;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+    overflow-x: auto;
+  }
+  .code-frame pre { margin: 0; padding: 12px 14px; color: #cdd1d8; }
+  .code-frame .kw { color: #c792ea; }
+  .code-frame .fn { color: #82aaff; }
+  .code-frame .str { color: #c3e88d; }
+  .code-frame .num { color: #f78c6c; }
+  .code-frame .com { color: #5b6272; font-style: italic; }
+  .code-frame .ty  { color: #ffcb6b; }
+  .code-frame .pn  { color: #89ddff; }
+  .code-toolbar {
+    display: flex; gap: 6px; padding: 8px 10px;
+    border-top: 1px solid var(--line); background: var(--bg-3);
+  }
+  .code-toolbar button {
+    background: var(--bg-2); border: 1px solid var(--line-2);
+    color: var(--fg); padding: 4px 9px; border-radius: 5px;
+    font-size: 11.5px; cursor: pointer;
+  }
+  .code-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+  .code-toolbar .filename {
+    margin-right: auto; align-self: center;
+    font-family: var(--mono); font-size: 11.5px; color: var(--fg-dim);
+  }
+
+  /* ------- slider playground ------- */
+  .play { display: grid; grid-template-columns: 220px 1fr; gap: 16px; }
+  .play .preview {
+    background: var(--bg-3); border-radius: 8px;
+    display: grid; place-items: center;
+    padding: 24px 12px; min-height: 160px;
+  }
+  .streak {
+    font-family: var(--mono); font-size: 44px; font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+    transition: transform var(--dur, 300ms) cubic-bezier(.34,1.56,.64,1);
+  }
+  .streak .label {
+    display: block; font-size: 11px; color: var(--fg-dim);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 500; margin-top: 4px;
+  }
+  .controls { display: flex; flex-direction: column; gap: 12px; }
+  .ctrl label {
+    display: flex; justify-content: space-between; font-size: 12px;
+    color: var(--fg-dim); margin-bottom: 4px;
+  }
+  .ctrl label .v { color: var(--accent); font-family: var(--mono); }
+  .ctrl input[type=range] {
+    width: 100%; accent-color: var(--accent);
+    background: transparent;
+  }
+  .ctrl select {
+    width: 100%; background: var(--bg-3); color: var(--fg);
+    border: 1px solid var(--line-2); border-radius: 5px;
+    padding: 5px 8px; font-family: var(--mono); font-size: 12px;
+  }
+  .play .actions { grid-column: 1 / -1; display: flex; gap: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+  .play .actions button {
+    background: var(--bg-3); border: 1px solid var(--line-2); color: var(--fg);
+    padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  }
+  .play .actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .play .actions button:hover { filter: brightness(1.1); }
+
+  /* ------- schema diagram ------- */
+  .schema { padding: 0; }
+  .schema svg { width: 100%; height: 280px; display: block; }
+  .schema .node-label { font-family: var(--mono); font-size: 11px; fill: var(--fg); }
+  .schema .node-field { font-family: var(--mono); font-size: 10px; fill: var(--fg-dim); }
+  .schema rect.entity { fill: var(--bg-3); stroke: var(--line-2); stroke-width: 1; cursor: pointer; }
+  .schema rect.entity:hover { stroke: var(--accent); }
+  .schema rect.entity.active { stroke: var(--accent); stroke-width: 2; }
+  .schema line.rel { stroke: var(--fg-mute); stroke-width: 1; stroke-dasharray: 3 3; }
+  .schema text.title { font-family: var(--sans); font-size: 11px; font-weight: 600; fill: var(--accent); }
+
+  /* ------- diff ------- */
+  .diff { font-family: var(--mono); font-size: 12.5px; line-height: 1.55; padding: 4px 0; }
+  .diff .row { display: flex; padding: 0 12px; white-space: pre; }
+  .diff .gutter { color: var(--fg-mute); width: 32px; text-align: right; padding-right: 10px; user-select: none; }
   .diff .add { background: #16321f; }
-  .diff .add .gutter { color: #6fb787; }
   .diff .add::before { content: "+"; color: #6fb787; width: 14px; display: inline-block; }
   .diff .del { background: #3a1c1c; }
-  .diff .del .gutter { color: #d97070; }
   .diff .del::before { content: "−"; color: #d97070; width: 14px; display: inline-block; }
-  .diff .ctx::before { content: " "; width: 14px; display: inline-block; }
   .diff .ctx { color: var(--fg-dim); }
-  .file-tabs { display: flex; gap: 6px; padding: 6px 10px 0; border-bottom: 1px solid var(--line); }
-  .file-tab { padding: 5px 10px; border-radius: 6px 6px 0 0; font-family: var(--mono); font-size: 12px; color: var(--fg-dim); cursor: pointer; }
-  .file-tab.active { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-bottom: 1px solid var(--bg); margin-bottom: -1px; }
+  .diff .ctx::before { content: " "; width: 14px; display: inline-block; }
 
-  /* terminal block */
+  /* ------- terminal ------- */
   .term {
     font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
-    background: #08090b; color: #cdd1d8;
-    padding: 10px 12px; border-radius: 6px;
-    max-height: 220px; overflow-y: auto; white-space: pre-wrap;
+    background: #08090b; color: #cdd1d8; padding: 10px 12px;
+    margin: 0; max-height: 220px; overflow-y: auto;
+    white-space: pre-wrap;
   }
   .term .ok { color: var(--green); }
   .term .err { color: var(--red); }
   .term .dim { color: var(--fg-mute); }
 
-  /* tests block */
-  .tests { display: flex; flex-direction: column; gap: 4px; }
+  /* ------- tests ------- */
+  .tests { display: flex; flex-direction: column; gap: 3px; padding: 4px 0; }
   .test {
     display: flex; align-items: center; gap: 10px;
-    padding: 6px 8px; border-radius: 6px; font-family: var(--mono); font-size: 12.5px;
+    padding: 5px 12px; font-family: var(--mono); font-size: 12.5px;
   }
-  .test:hover { background: var(--bg-3); }
   .test .badge {
     width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center;
     font-size: 11px; color: white; flex-shrink: 0;
@@ -229,65 +354,35 @@
   .test.pend .badge { background: var(--bg-3); border: 1px solid var(--line-2); color: var(--fg-mute); }
   .test .name { color: var(--fg); }
   .test .time { margin-left: auto; color: var(--fg-mute); font-size: 11px; }
-  .tests-summary {
-    display: flex; gap: 14px; padding: 8px 4px 0; margin-top: 6px;
-    border-top: 1px dashed var(--line); color: var(--fg-dim); font-size: 12px;
-  }
-  .tests-summary b { color: var(--fg); font-variant-numeric: tabular-nums; }
 
-  /* question block */
-  .question {
-    border-color: #4a3a26;
-    background: linear-gradient(to bottom, #2a1f12, var(--bg-2));
-  }
-  .question .block-header { background: #2a1f12; color: #e8c997; border-color: #4a3a26; }
-  .question .opts { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-  .question .opt {
-    padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 6px;
-    cursor: pointer; transition: 80ms;
-  }
-  .question .opt:hover { border-color: var(--accent); background: var(--accent-soft); }
-  .question .opt.picked { border-color: var(--green); background: #16241c; }
-  .question .opt-label { font-weight: 500; }
-  .question .opt-desc { color: var(--fg-dim); font-size: 12px; margin-top: 2px; }
+  /* file tree */
+  .tree { font-family: var(--mono); font-size: 12.5px; padding: 4px 0; }
+  .tree .row { display: flex; align-items: center; gap: 6px; padding: 3px 12px; cursor: pointer; }
+  .tree .row:hover { background: var(--bg-3); }
+  .tree .row .ico { color: var(--fg-mute); width: 14px; }
+  .tree .row.file .ico { color: var(--blue); }
+  .tree .row.new::after { content: "new"; margin-left: 8px; font-size: 10px; padding: 1px 5px; background: var(--accent-soft); color: var(--accent); border-radius: 3px; }
+  .tree .indent { display: inline-block; width: 14px; }
 
-  /* search block */
-  .search-results { display: flex; flex-direction: column; gap: 2px; }
-  .search-result {
-    display: flex; gap: 10px; padding: 4px 8px; border-radius: 6px;
-    font-family: var(--mono); font-size: 12px; cursor: pointer;
+  /* ------- assistant note (still text, but small) ------- */
+  .note {
+    font-size: 13px; color: var(--fg-dim); line-height: 1.5;
+    padding: 8px 14px;
   }
-  .search-result:hover { background: var(--bg-3); }
-  .search-result .path { color: var(--blue); }
-  .search-result .ln { color: var(--fg-mute); }
-  .search-result .snip { color: var(--fg-dim); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .search-result .snip mark { background: #4a3a14; color: #f0d484; padding: 0 2px; border-radius: 2px; }
-
-  /* thought block */
-  .thought { background: transparent; border-style: dashed; border-color: var(--line); }
-  .thought .block-header { background: transparent; color: var(--fg-mute); border-bottom-style: dashed; }
-  .thought .block-body { color: var(--fg-dim); font-style: italic; font-size: 13px; }
-
-  /* tool call collapsed */
-  details.tool { border: 1px solid var(--line); border-radius: 6px; background: var(--bg-3); }
-  details.tool summary {
-    cursor: pointer; padding: 6px 10px; font-family: var(--mono); font-size: 12px;
-    color: var(--fg-dim); list-style: none; display: flex; gap: 8px; align-items: center;
+  .note .ref {
+    color: var(--accent); font-family: var(--mono); font-size: 11.5px;
+    cursor: pointer; padding: 1px 5px; border-radius: 3px; background: var(--accent-soft);
   }
-  details.tool summary::-webkit-details-marker { display: none; }
-  details.tool summary::before { content: "▸"; color: var(--fg-mute); transition: transform 120ms; display: inline-block; }
-  details.tool[open] summary::before { transform: rotate(90deg); }
-  details.tool .body { padding: 10px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; }
+  .note .ref:hover { filter: brightness(1.15); }
 
-  /* input bar */
+  /* ------- composer ------- */
   .input-bar {
-    grid-area: input;
     border-top: 1px solid var(--line);
     background: var(--bg-2);
-    padding: 12px 28px 14px;
+    padding: 12px 20px 14px;
   }
   .input-wrap {
-    max-width: 920px; margin: 0 auto;
+    max-width: 880px; margin: 0 auto;
     display: flex; align-items: flex-end; gap: 10px;
     background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 10px;
     padding: 8px 10px;
@@ -295,11 +390,12 @@
   .input-wrap:focus-within { border-color: var(--accent); }
   .input-wrap textarea {
     flex: 1; background: transparent; border: 0; outline: 0; resize: none;
-    color: var(--fg); font-family: var(--sans); font-size: 14px; min-height: 22px; max-height: 140px;
+    color: var(--fg); font-family: var(--sans); font-size: 14px;
+    min-height: 22px; max-height: 140px;
   }
   .send-btn {
     background: var(--accent); color: white; border: 0; border-radius: 6px;
-    padding: 6px 12px; font-weight: 600; cursor: pointer;
+    padding: 6px 14px; font-weight: 600; cursor: pointer;
   }
   .send-btn:hover { filter: brightness(1.05); }
 
@@ -307,7 +403,7 @@
   .ctx-menu {
     position: fixed; z-index: 1000;
     background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 8px;
-    padding: 4px; min-width: 220px;
+    padding: 4px; min-width: 240px;
     box-shadow: 0 12px 30px #0009;
     font-size: 13px;
   }
@@ -317,33 +413,23 @@
     display: flex; align-items: center; gap: 10px;
   }
   .ctx-menu button:hover { background: var(--bg-3); }
-  .ctx-menu .kbd {
-    margin-left: auto; color: var(--fg-mute); font-family: var(--mono); font-size: 11px;
-  }
+  .ctx-menu .kbd { margin-left: auto; color: var(--fg-mute); font-family: var(--mono); font-size: 11px; }
   .ctx-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
-  .ctx-menu .danger { color: var(--red); }
 
-  /* highlight a referenced block */
-  .block.referenced {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
-  }
-
-  /* small utilities */
-  .row { display: flex; align-items: center; gap: 8px; }
-  code.inline {
-    font-family: var(--mono); font-size: 12.5px;
-    background: var(--bg-3); padding: 1px 5px; border-radius: 4px;
-    color: var(--fg);
-  }
-  .ref {
-    color: var(--accent); font-family: var(--mono); font-size: 12px;
-    cursor: pointer; padding: 1px 5px; border-radius: 4px; background: var(--accent-soft);
-  }
-  .ref:hover { filter: brightness(1.15); }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
+
+  /* turn divider */
+  .turn-divider {
+    text-align: center; color: var(--fg-mute); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin: 8px 0;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .turn-divider::before, .turn-divider::after {
+    content: ""; flex: 1; height: 1px; background: var(--line);
+  }
 </style>
 </head>
 <body>
@@ -351,46 +437,38 @@
 <header>
   <div class="logo">C</div>
   <div>
-    <div class="title">claude code <span class="sub">— /home/user/checkout-svc</span></div>
+    <div class="title">claude code <span class="sub">— building <code style="font-family: var(--mono); color: var(--fg-dim)">habits/</code> from scratch</span></div>
   </div>
   <div class="spacer"></div>
   <span class="pill">claude-opus-4-7</span>
   <span class="pill live" id="live-pill">working</span>
 </header>
 
-<aside>
-  <h3>Session</h3>
-  <div class="nav-item"><span class="dot green"></span>Plan <span class="count" id="nav-plan">0/0</span></div>
-  <div class="nav-item"><span class="dot yellow"></span>Open questions <span class="count" id="nav-q">0</span></div>
-  <div class="nav-item"><span class="dot green"></span>Tests <span class="count" id="nav-tests">—</span></div>
-  <div class="nav-item"><span class="dot"></span>Files touched <span class="count" id="nav-files">0</span></div>
-
-  <h3>Touched files</h3>
-  <div id="file-list"></div>
-
-  <h3>Jump to</h3>
-  <div class="nav-item" data-jump="plan-1">📋 Implement idempotency keys</div>
-  <div class="nav-item" data-jump="user-1">💬 Original request</div>
-  <div class="nav-item" data-jump="end">⤓ Latest</div>
-</aside>
-
 <main id="main">
-  <div class="stream" id="stream"></div>
+  <div class="stream" id="stream">
+
+    <div class="intro">
+      <b>What you're seeing.</b> Each box below is one component the agent rendered in response to a prompt.
+      Components <b>stack chronologically</b> — they are the session. Each one is interactive: click checkboxes,
+      drag sliders, push buttons, copy code. <b>Right-click any component</b> to ask claude about that specific
+      one. Click <kbd>@b-id</kbd> pills inside any reply to scroll to and highlight the referenced component.
+    </div>
+
+  </div>
 </main>
 
 <div class="input-bar">
   <div class="input-wrap">
-    <textarea id="composer" placeholder="Reply, or right-click any block above to ask about it..." rows="1"></textarea>
+    <textarea id="composer" placeholder="Reply, or right-click any component above to ask about it..." rows="1"></textarea>
     <button class="send-btn" id="send">Send</button>
   </div>
 </div>
 
-<!-- context menu template -->
-<div class="ctx-menu" id="ctx-menu" style="display: none;"></div>
+<div class="ctx-menu" id="ctx-menu" style="display:none"></div>
 
 <script>
 /* =========================================================
-   tiny helpers
+   helpers
    ========================================================= */
 const $  = (sel, el=document) => el.querySelector(sel);
 const $$ = (sel, el=document) => [...el.querySelectorAll(sel)];
@@ -409,20 +487,16 @@ const el = (tag, attrs={}, ...children) => {
   return n;
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const now   = () => {
-  const d = new Date();
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-};
 
 /* =========================================================
-   block registry — every block has an id; can be looked up + mutated
+   block registry — every component has a stable id
    ========================================================= */
-const blocks = new Map();   // id -> { dom, type, data }
+const blocks = new Map();
 let nextId = 1;
-const newId = (prefix="b") => `${prefix}-${nextId++}`;
+const newId = (prefix="c") => `${prefix}-${nextId++}`;
 
-function registerBlock(id, type, dom, data={}) {
-  blocks.set(id, { id, dom, type, data });
+function registerComponent(id, kind, dom, data={}) {
+  blocks.set(id, { id, kind, dom, data });
   dom.dataset.blockId = id;
   dom.addEventListener("contextmenu", openContextMenu);
   return id;
@@ -433,100 +507,67 @@ function flash(id) {
   b.dom.classList.remove("flash"); void b.dom.offsetWidth; b.dom.classList.add("flash");
 }
 
-function appendBlock(node) {
-  $("#stream").append(node);
-  // autoscroll if user is near bottom
+let currentTurn = null;
+function startTurn(prompt) {
+  const id = newId("turn");
+  const turn = el("div", { class: "turn", id });
+  const pBlock = el("div", { class: "turn-prompt" },
+    el("div", { class: "who" }, "you"),
+    el("div", null, prompt)
+  );
+  turn.append(pBlock);
+  $("#stream").append(turn);
+  currentTurn = turn;
+  // register the prompt as a block too (so you can right-click it)
+  const pid = newId("p");
+  registerComponent(pid, "prompt", pBlock, { text: prompt });
+  // autoscroll
   const m = $("#main");
-  if (m.scrollHeight - m.scrollTop - m.clientHeight < 200) {
-    m.scrollTop = m.scrollHeight;
-  }
+  m.scrollTop = m.scrollHeight;
+  return turn;
+}
+
+function appendComponent(node) {
+  if (!currentTurn) currentTurn = $("#stream");
+  currentTurn.append(node);
+  const m = $("#main");
+  if (m.scrollHeight - m.scrollTop - m.clientHeight < 250) m.scrollTop = m.scrollHeight;
+}
+
+function header(icon, kind, name, meta, idTag) {
+  return el("div", { class: "c-head" },
+    el("span", { class: "icon" }, icon),
+    el("span", { class: "kind" }, kind),
+    el("span", { class: "name" }, name),
+    el("span", { class: "meta" }, meta || ""),
+    idTag ? el("span", { class: "id-tag" }, "@" + idTag) : null,
+  );
 }
 
 /* =========================================================
-   block renderers — each returns a DOM node and registers itself
+   component renderers
    ========================================================= */
-function renderHeader(icon, name, meta, status) {
-  return el("div", { class: "block-header" },
-    el("span", { class: "icon", html: icon }),
-    el("span", { class: "name" }, name),
-    el("span", { class: "meta" }, meta || now())
-  );
-}
 
-function makeUserBlock(text) {
-  const id = newId("user");
-  const node = el("div", { class: "block msg user", id },
-    renderHeader("👤", "you"),
-    el("div", { class: "block-body" }, text)
-  );
-  appendBlock(node);
-  registerBlock(id, "user", node, { text });
-  return id;
-}
-
-function makeAssistantBlock(text) {
-  const id = newId("ast");
-  const node = el("div", { class: "block msg" },
-    renderHeader("✦", "claude"),
-    el("div", { class: "block-body", html: text })
-  );
-  appendBlock(node);
-  registerBlock(id, "assistant", node, { text });
-  return id;
-}
-
-function makeThoughtBlock(text) {
-  const id = newId("thought");
-  const node = el("div", { class: "block thought" },
-    renderHeader("💭", "thinking"),
-    el("div", { class: "block-body" }, text)
-  );
-  appendBlock(node);
-  registerBlock(id, "thought", node, { text });
-  return id;
-}
-
-function makePlanBlock(title, items) {
+/* -- plan -- */
+function renderPlan(name, items) {
   const id = newId("plan");
   const ul = el("ul");
   items.forEach((label, i) => {
-    const li = el("li", { onclick: () => togglePlan(id, i) },
+    const li = el("li", { onclick: () => { items[i].done = !items[i].done; refreshPlan(id); } },
       el("span", { class: "check" }),
-      el("span", { class: "label" }, label)
+      el("span", null, label)
     );
     ul.append(li);
   });
-  const node = el("div", { class: "block plan" },
-    renderHeader("📋", title),
-    el("div", { class: "block-body" }, ul)
+  const node = el("div", { class: "component plan" },
+    header("📋", "plan", name, items.length + " steps", id),
+    el("div", { class: "c-body" }, ul)
   );
-  appendBlock(node);
-  registerBlock(id, "plan", node, { title, items: items.map(label => ({ label, done: false, active: false })) });
-  updatePlanNav();
+  appendComponent(node);
+  registerComponent(id, "plan", node, { items: items.map(label => ({ label, done: false, active: false })) });
+  refreshPlan(id);
   return id;
 }
-
-function togglePlan(id, i) {
-  const b = blocks.get(id); if (!b) return;
-  b.data.items[i].done = !b.data.items[i].done;
-  b.data.items[i].active = false;
-  refreshPlan(id);
-}
-
-function setPlanActive(id, i) {
-  const b = blocks.get(id); if (!b) return;
-  b.data.items.forEach(it => it.active = false);
-  if (i != null) b.data.items[i].active = true;
-  refreshPlan(id);
-}
-
-function setPlanDone(id, i) {
-  const b = blocks.get(id); if (!b) return;
-  b.data.items[i].done = true;
-  b.data.items[i].active = false;
-  refreshPlan(id);
-}
-
 function refreshPlan(id) {
   const b = blocks.get(id); if (!b) return;
   $$("li", b.dom).forEach((li, i) => {
@@ -534,311 +575,453 @@ function refreshPlan(id) {
     li.classList.toggle("active", b.data.items[i].active);
   });
   flash(id);
-  updatePlanNav();
+}
+function planAdvance(id, idx) {
+  const b = blocks.get(id); if (!b) return;
+  b.data.items.forEach(it => it.active = false);
+  if (idx > 0) b.data.items[idx - 1].done = true;
+  if (idx < b.data.items.length) b.data.items[idx].active = true;
+  refreshPlan(id);
 }
 
-function updatePlanNav() {
-  let total = 0, done = 0;
-  for (const b of blocks.values()) {
-    if (b.type !== "plan") continue;
-    total += b.data.items.length;
-    done  += b.data.items.filter(x => x.done).length;
+/* -- comparison table -- */
+function renderCompare(name, columns, rows) {
+  const id = newId("cmp");
+  const table = el("table");
+  const thead = el("tr");
+  thead.append(el("th", null, ""));
+  columns.forEach(c => thead.append(el("th", null, c)));
+  thead.append(el("th", null, ""));
+  table.append(thead);
+  rows.forEach((r, ri) => {
+    const tr = el("tr", { "data-row": ri });
+    tr.append(el("td", { class: "opt" }, r.option));
+    r.values.forEach((v, ci) => tr.append(el("td", null, el("span", { class: `v ${v.kind || ""}` }, v.text || v))));
+    tr.append(el("td", null, el("button", { class: "pick", onclick: () => pickRow(id, ri) }, "pick")));
+    table.append(tr);
+  });
+  const node = el("div", { class: "component compare" },
+    header("⚖", "compare", name, rows.length + " options", id),
+    el("div", { class: "c-body" }, table)
+  );
+  appendComponent(node);
+  registerComponent(id, "compare", node, { columns, rows, picked: null });
+  return id;
+}
+function pickRow(id, ri) {
+  const b = blocks.get(id); if (!b) return;
+  b.data.picked = ri;
+  $$("tr", b.dom).forEach(tr => tr.classList.remove("picked"));
+  $(`tr[data-row="${ri}"]`, b.dom).classList.add("picked");
+  $$(".pick", b.dom).forEach((btn, i) => btn.textContent = i === ri ? "✓ picked" : "pick");
+  setTimeout(() => renderNote(`Got it — going with <b>${b.data.rows[ri].option}</b>. <span class="ref" data-id="${id}">@${id}</span>`), 350);
+}
+
+/* -- design exploration -- */
+function renderDesigns(name, designs) {
+  const id = newId("des");
+  const grid = el("div", { class: "designs" });
+  designs.forEach((d, i) => {
+    const tile = el("div", { class: "design", onclick: () => pickDesign(id, i) },
+      el("div", { class: "preview" }, ...d.mock()),
+      el("div", { class: "label" },
+        el("span", { class: "name" }, d.name),
+        el("span", { class: "tag" }, d.tag)
+      )
+    );
+    grid.append(tile);
+  });
+  const node = el("div", { class: "component" },
+    header("🎨", "design", name, designs.length + " options", id),
+    el("div", { class: "c-body" }, grid)
+  );
+  appendComponent(node);
+  registerComponent(id, "design", node, { designs, picked: null });
+  return id;
+}
+function pickDesign(id, i) {
+  const b = blocks.get(id); if (!b) return;
+  b.data.picked = i;
+  $$(".design", b.dom).forEach((d, idx) => d.classList.toggle("picked", idx === i));
+  setTimeout(() => renderNote(`Going with the <b>${b.data.designs[i].name}</b> direction (<span class="ref" data-id="${id}">@${id}</span>). Generating the component next…`), 350);
+}
+
+/* mockup builders for the design tiles (just css squares pretending to be UI) */
+const mocks = {
+  cards: () => [
+    el("div", { class: "mock-card" }, el("div", { class: "mock-dot", style: "background: #f06292" }), el("div", { class: "mock-bar", style: "flex:1; background: #4a3a4a" })),
+    el("div", { class: "mock-card" }, el("div", { class: "mock-dot", style: "background: #82aaff" }), el("div", { class: "mock-bar", style: "flex:1; background: #2a3a4a" })),
+    el("div", { class: "mock-card" }, el("div", { class: "mock-dot", style: "background: #c3e88d" }), el("div", { class: "mock-bar", style: "flex:1; background: #2a4a3a" })),
+    el("div", { class: "mock-card" }, el("div", { class: "mock-dot", style: "background: #ffcb6b" }), el("div", { class: "mock-bar", style: "flex:1; background: #4a4a2a" })),
+  ],
+  grid: () => {
+    const wrap = el("div", { style: "display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; flex: 1;" });
+    ["#f06292", "#82aaff", "#c3e88d", "#ffcb6b", "#a78bfa", "#5fb87a"].forEach(c =>
+      wrap.append(el("div", { style: `background: ${c}33; border: 1px solid ${c}66; border-radius: 4px; min-height: 30px; display: grid; place-items: center; color: ${c}; font-size: 14px;` }, "✓"))
+    );
+    return [wrap];
+  },
+  timeline: () => {
+    const days = el("div", { style: "display: flex; gap: 3px; align-items: flex-end; height: 50px;" });
+    [0.4, 0.7, 0.5, 0.9, 0.3, 0.8, 1.0].forEach(h =>
+      days.append(el("div", { style: `flex: 1; background: #d97757; height: ${h * 100}%; border-radius: 2px 2px 0 0;` }))
+    );
+    return [
+      el("div", { style: "color: var(--accent); font-weight: 700;" }, "🔥 12 day streak"),
+      days,
+      el("div", { style: "color: var(--fg-mute); font-size: 9px; text-align: center;" }, "MTWTFSS"),
+    ];
+  },
+};
+
+/* -- code block -- */
+function highlight(code, lang) {
+  // tiny tokenizer for js/tsx
+  return code
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/(\/\/[^\n]*)/g, '<span class="com">$1</span>')
+    .replace(/('[^']*'|"[^"]*"|`[^`]*`)/g, '<span class="str">$1</span>')
+    .replace(/\b(import|from|export|const|let|function|return|if|else|for|interface|type|async|await|new|class|extends)\b/g, '<span class="kw">$1</span>')
+    .replace(/\b(useState|useEffect|useMemo|useRef|useCallback)\b/g, '<span class="fn">$1</span>')
+    .replace(/\b([A-Z][A-Za-z0-9]*)\b/g, '<span class="ty">$1</span>')
+    .replace(/\b(\d+)\b/g, '<span class="num">$1</span>');
+}
+function renderCode(filename, lang, code) {
+  const id = newId("code");
+  const node = el("div", { class: "component" },
+    header("⟨/⟩", "code", filename, lang, id),
+    el("div", { class: "code-frame" },
+      el("pre", { html: highlight(code, lang) })
+    ),
+    el("div", { class: "code-toolbar" },
+      el("span", { class: "filename" }, filename),
+      el("button", { onclick: () => { navigator.clipboard?.writeText(code); flash(id); } }, "Copy"),
+      el("button", { onclick: () => askAbout(blocks.get(id), "Edit this and re-prompt: ") }, "Edit & re-prompt"),
+      el("button", { onclick: () => renderNote(`Saved <code style="font-family: var(--mono)">${filename}</code> to disk. (mock)`) }, "Save to project"),
+      el("button", { onclick: () => askAbout(blocks.get(id), "Explain this code line by line.") }, "Explain"),
+    )
+  );
+  appendComponent(node);
+  registerComponent(id, "code", node, { filename, lang, code });
+  return id;
+}
+
+/* -- slider playground (tunable animation) -- */
+function renderPlayground(name) {
+  const id = newId("play");
+  const preview = el("div", { class: "preview" });
+  const streak = el("div", { class: "streak" }, "12", el("span", { class: "label" }, "day streak"));
+  preview.append(streak);
+
+  const settings = { duration: 300, scale: 1.4, easing: "spring" };
+  function animate() {
+    streak.style.setProperty("--dur", settings.duration + "ms");
+    const easings = {
+      spring: "cubic-bezier(.34,1.56,.64,1)",
+      ease:   "cubic-bezier(.4,0,.2,1)",
+      bounce: "cubic-bezier(.68,-0.55,.27,1.55)",
+      linear: "linear",
+    };
+    streak.style.transitionTimingFunction = easings[settings.easing];
+    streak.style.transform = `scale(${settings.scale})`;
+    setTimeout(() => streak.style.transform = "scale(1)", settings.duration);
   }
-  $("#nav-plan").textContent = `${done}/${total}`;
+
+  const ctrls = el("div", { class: "controls" },
+    ctrl("Duration", settings.duration + "ms",
+      el("input", { type: "range", min: 100, max: 1000, value: settings.duration,
+        oninput: e => { settings.duration = +e.target.value; refreshLabel(0); animate(); } }), 0),
+    ctrl("Scale", settings.scale + "×",
+      el("input", { type: "range", min: 1, max: 2.5, step: 0.1, value: settings.scale,
+        oninput: e => { settings.scale = +e.target.value; refreshLabel(1); animate(); } }), 1),
+    ctrl("Easing", settings.easing,
+      el("select", { onchange: e => { settings.easing = e.target.value; refreshLabel(2); animate(); } },
+        ...["spring", "ease", "bounce", "linear"].map(o => el("option", { value: o, selected: o === settings.easing ? "selected" : false }, o))
+      ), 2),
+  );
+  function ctrl(label, val, input, idx) {
+    return el("div", { class: "ctrl", "data-i": idx },
+      el("label", null, el("span", null, label), el("span", { class: "v" }, val)),
+      input
+    );
+  }
+  function refreshLabel(idx) {
+    const c = $(`.ctrl[data-i="${idx}"] .v`, node);
+    if (idx === 0) c.textContent = settings.duration + "ms";
+    if (idx === 1) c.textContent = settings.scale + "×";
+    if (idx === 2) c.textContent = settings.easing;
+  }
+
+  const actions = el("div", { class: "actions" },
+    el("button", { onclick: animate }, "▶ Replay"),
+    el("button", { class: "primary", onclick: () => {
+      const prompt = `Apply these animation settings to the streak counter: duration=${settings.duration}ms, scale=${settings.scale}, easing=${settings.easing}`;
+      $("#composer").value = prompt;
+      $("#composer").focus();
+    }}, "Copy as prompt"),
+  );
+
+  const node = el("div", { class: "component" },
+    header("🎚", "playground", name, "tunable", id),
+    el("div", { class: "c-body" },
+      el("div", { class: "play" }, preview, ctrls, actions)
+    )
+  );
+  appendComponent(node);
+  registerComponent(id, "play", node, { settings });
+  setTimeout(animate, 600);
+  return id;
 }
 
-function makeFileEditBlock(filename, hunks) {
-  const id = newId("edit");
+/* -- schema diagram (interactive svg) -- */
+function renderSchema(name) {
+  const id = newId("sch");
+  const svg = `
+    <svg viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg">
+      <line class="rel" x1="180" y1="80" x2="320" y2="80" />
+      <line class="rel" x1="180" y1="200" x2="320" y2="80" />
+
+      <g data-entity="user">
+        <rect class="entity active" x="20" y="40" width="160" height="80" rx="6" />
+        <text class="title" x="32" y="60">User</text>
+        <text class="node-field" x="32" y="80">id: uuid (pk)</text>
+        <text class="node-field" x="32" y="95">email: text</text>
+        <text class="node-field" x="32" y="110">created_at: ts</text>
+      </g>
+
+      <g data-entity="habit">
+        <rect class="entity" x="320" y="40" width="170" height="80" rx="6" />
+        <text class="title" x="332" y="60">Habit</text>
+        <text class="node-field" x="332" y="80">id: uuid (pk)</text>
+        <text class="node-field" x="332" y="95">user_id: uuid (fk)</text>
+        <text class="node-field" x="332" y="110">name: text</text>
+      </g>
+
+      <g data-entity="checkin">
+        <rect class="entity" x="20" y="160" width="160" height="80" rx="6" />
+        <text class="title" x="32" y="180">CheckIn</text>
+        <text class="node-field" x="32" y="200">id: uuid (pk)</text>
+        <text class="node-field" x="32" y="215">habit_id: uuid (fk)</text>
+        <text class="node-field" x="32" y="230">date: date</text>
+      </g>
+
+      <g data-entity="streak">
+        <rect class="entity" x="320" y="160" width="170" height="80" rx="6" />
+        <text class="title" x="332" y="180">Streak</text>
+        <text class="node-field" x="332" y="200">habit_id: uuid (pk)</text>
+        <text class="node-field" x="332" y="215">current: int</text>
+        <text class="node-field" x="332" y="230">longest: int</text>
+      </g>
+    </svg>`;
+  const detail = el("div", {
+    style: "padding: 8px 14px; border-top: 1px solid var(--line); color: var(--fg-dim); font-size: 12px;"
+  }, "Click a table to see its purpose.");
+  const node = el("div", { class: "component schema" },
+    header("🗂", "schema", name, "4 tables", id),
+    el("div", { html: svg }),
+    detail,
+  );
+  const explanations = {
+    user: "Just an account row — auth + ownership of habits.",
+    habit: "A habit being tracked. Belongs to a user. Has a name and a frequency.",
+    checkin: "One row per day a habit was completed. Source of truth — streaks are derived from this.",
+    streak: "Materialized streak counters, recomputed on each check-in. Cached for the dashboard query.",
+  };
+  appendComponent(node);
+  registerComponent(id, "schema", node, {});
+  // wire up clicks
+  setTimeout(() => {
+    $$("g[data-entity]", node).forEach(g => g.addEventListener("click", () => {
+      $$("rect.entity", node).forEach(r => r.classList.remove("active"));
+      g.querySelector("rect").classList.add("active");
+      detail.innerHTML = "<b>" + g.dataset.entity + "</b> — " + explanations[g.dataset.entity];
+    }));
+  }, 0);
+  return id;
+}
+
+/* -- diff -- */
+function renderDiff(filename, hunks) {
+  const id = newId("diff");
   const diff = el("div", { class: "diff" });
   let lineNo = hunks[0]?.startLine ?? 1;
+  let adds = 0, dels = 0;
   hunks.forEach(h => {
-    h.lines.forEach(([kind, text]) => {
-      const cls = kind === "+" ? "add" : kind === "-" ? "del" : "ctx";
+    h.lines.forEach(([k, t]) => {
+      const cls = k === "+" ? "add" : k === "-" ? "del" : "ctx";
+      if (k === "+") adds++; if (k === "-") dels++;
       diff.append(el("div", { class: `row ${cls}` },
-        el("span", { class: "gutter" }, kind === "+" ? "" : kind === "-" ? "" : String(lineNo)),
-        document.createTextNode(text)
+        el("span", { class: "gutter" }, k === "+" ? "" : k === "-" ? "" : String(lineNo)),
+        document.createTextNode(t)
       ));
-      if (kind !== "-") lineNo++;
+      if (k !== "-") lineNo++;
     });
   });
-  const adds = hunks.flatMap(h => h.lines).filter(l => l[0] === "+").length;
-  const dels = hunks.flatMap(h => h.lines).filter(l => l[0] === "-").length;
-  const node = el("div", { class: "block ok" },
-    renderHeader("✎", filename, `+${adds} −${dels}`),
+  const node = el("div", { class: "component" },
+    header("✎", "diff", filename, `+${adds} −${dels}`, id),
     diff
   );
-  appendBlock(node);
-  registerBlock(id, "edit", node, { filename, hunks });
-  trackFile(filename);
+  appendComponent(node);
+  registerComponent(id, "diff", node, { filename, hunks });
   return id;
 }
 
-function trackFile(name) {
-  const list = $("#file-list");
-  if ($$(`.nav-item`, list).some(n => n.textContent.includes(name))) return;
-  list.append(el("div", { class: "nav-item" },
-    el("span", { class: "dot green" }),
-    el("span", null, name)
-  ));
-  $("#nav-files").textContent = String($$(".nav-item", list).length);
+/* -- file tree -- */
+function renderTree(name, paths) {
+  const id = newId("tree");
+  const wrap = el("div", { class: "tree" });
+  paths.forEach(p => {
+    const depth = (p.path.match(/\//g) || []).length;
+    wrap.append(el("div", { class: `row ${p.kind || "file"} ${p.isNew ? "new" : ""}` },
+      ...Array(depth).fill(0).map(() => el("span", { class: "indent" })),
+      el("span", { class: "ico" }, p.kind === "dir" ? "▸" : "•"),
+      el("span", null, p.path.split("/").pop()),
+    ));
+  });
+  const node = el("div", { class: "component" },
+    header("📁", "tree", name, paths.length + " files", id),
+    wrap
+  );
+  appendComponent(node);
+  registerComponent(id, "tree", node, { paths });
+  return id;
 }
 
-function makeTerminalBlock(cmd) {
+/* -- terminal -- */
+function renderTerminal(cmd) {
   const id = newId("term");
   const term = el("pre", { class: "term" });
-  const node = el("div", { class: "block run" },
-    renderHeader("⌘", `$ ${cmd}`, "running…"),
-    el("div", { class: "block-body" }, term)
+  const node = el("div", { class: "component" },
+    header("⌘", "terminal", `$ ${cmd}`, "running…", id),
+    term
   );
-  appendBlock(node);
-  registerBlock(id, "term", node, { cmd, lines: [] });
+  appendComponent(node);
+  registerComponent(id, "term", node, { cmd, lines: [] });
   return id;
 }
-
 function termWrite(id, text, cls) {
   const b = blocks.get(id); if (!b) return;
   const term = $(".term", b.dom);
-  const span = cls ? el("span", { class: cls }, text + "\n") : document.createTextNode(text + "\n");
-  term.append(span);
+  term.append(cls ? el("span", { class: cls }, text + "\n") : document.createTextNode(text + "\n"));
   term.scrollTop = term.scrollHeight;
-  b.data.lines.push({ text, cls });
 }
-
-function termDone(id, success=true) {
+function termDone(id, ok=true) {
   const b = blocks.get(id); if (!b) return;
-  b.dom.classList.remove("run");
-  b.dom.classList.add(success ? "ok" : "err");
-  $(".meta", b.dom).textContent = success ? "exit 0" : "exit 1";
+  $(".meta", b.dom).textContent = ok ? "exit 0" : "exit 1";
 }
 
-function makeTestsBlock(title, tests) {
-  const id = newId("tests");
-  const list = el("div", { class: "tests" });
-  tests.forEach(t => list.append(makeTestRow(t)));
-  const summary = el("div", { class: "tests-summary" });
-  const node = el("div", { class: "block run" },
-    renderHeader("✓", title, "running…"),
-    el("div", { class: "block-body" }, list, summary)
+/* -- tests -- */
+function renderTests(name, tests) {
+  const id = newId("tst");
+  const wrap = el("div", { class: "tests" });
+  tests.forEach(t => wrap.append(testRow(t)));
+  const node = el("div", { class: "component" },
+    header("✓", "tests", name, "running…", id),
+    wrap
   );
-  appendBlock(node);
-  registerBlock(id, "tests", node, { title, tests });
-  refreshTestsSummary(id);
+  appendComponent(node);
+  registerComponent(id, "tests", node, { tests });
   return id;
 }
-
-function makeTestRow(t) {
-  return el("div", { class: `test ${t.status}`, "data-test": t.name },
+function testRow(t) {
+  return el("div", { class: `test ${t.status}`, "data-name": t.name },
     el("span", { class: "badge" }, t.status === "pass" ? "✓" : t.status === "fail" ? "✕" : t.status === "run" ? "…" : ""),
     el("span", { class: "name" }, t.name),
     el("span", { class: "time" }, t.time || "")
   );
 }
-
-function setTestStatus(id, name, status, time) {
+function setTest(id, name, status, time) {
   const b = blocks.get(id); if (!b) return;
-  const t = b.data.tests.find(x => x.name === name);
-  if (!t) return;
+  const t = b.data.tests.find(x => x.name === name); if (!t) return;
   t.status = status; t.time = time || t.time;
-  const row = $(`.test[data-test="${CSS.escape(name)}"]`, b.dom);
-  row.replaceWith(makeTestRow(t));
-  refreshTestsSummary(id);
+  $(`.test[data-name="${CSS.escape(name)}"]`, b.dom).replaceWith(testRow(t));
 }
-
 function finishTests(id) {
   const b = blocks.get(id); if (!b) return;
   const failed = b.data.tests.filter(x => x.status === "fail").length;
-  b.dom.classList.remove("run");
-  b.dom.classList.add(failed ? "err" : "ok");
   $(".meta", b.dom).textContent = failed ? `${failed} failed` : "all passed";
 }
 
-function refreshTestsSummary(id) {
-  const b = blocks.get(id); if (!b) return;
-  const c = { pass: 0, fail: 0, run: 0, pend: 0 };
-  b.data.tests.forEach(t => c[t.status]++);
-  $(".tests-summary", b.dom).innerHTML =
-    `<span><b>${c.pass}</b> pass</span><span><b>${c.fail}</b> fail</span><span><b>${c.run}</b> running</span><span><b>${c.pend}</b> pending</span>`;
-  $("#nav-tests").textContent = `${c.pass}/${b.data.tests.length}`;
-}
-
-function makeQuestionBlock(question, options) {
-  const id = newId("q");
-  const opts = el("div", { class: "opts" });
-  options.forEach((o, i) => {
-    opts.append(el("div", {
-      class: "opt",
-      onclick: () => answerQuestion(id, i)
-    },
-      el("div", { class: "opt-label" }, o.label),
-      el("div", { class: "opt-desc" }, o.desc)
-    ));
-  });
-  const node = el("div", { class: "block question warn" },
-    renderHeader("?", "question for you"),
-    el("div", { class: "block-body" },
-      el("div", null, question),
-      opts
-    )
-  );
-  appendBlock(node);
-  registerBlock(id, "question", node, { question, options, picked: null });
-  $("#nav-q").textContent = String([...blocks.values()].filter(b => b.type === "question" && b.data.picked == null).length);
-  return id;
-}
-
-function answerQuestion(id, i) {
-  const b = blocks.get(id); if (!b || b.data.picked != null) return;
-  b.data.picked = i;
-  $$(".opt", b.dom).forEach((o, idx) => o.classList.toggle("picked", idx === i));
-  $(".meta", b.dom).textContent = "answered";
-  $("#nav-q").textContent = String([...blocks.values()].filter(x => x.type === "question" && x.data.picked == null).length);
-  // simulate the agent reacting
-  setTimeout(() => makeAssistantBlock(`Got it — going with <b>${b.data.options[i].label}</b>. Updating the plan.`), 400);
-}
-
-function makeSearchBlock(query, results) {
-  const id = newId("search");
-  const list = el("div", { class: "search-results" });
-  results.forEach(r => {
-    const snipHtml = r.snip.replace(new RegExp(`(${query})`, "gi"), "<mark>$1</mark>");
-    list.append(el("div", { class: "search-result" },
-      el("span", { class: "path" }, r.file),
-      el("span", { class: "ln" }, ":" + r.line),
-      el("span", { class: "snip", html: snipHtml })
-    ));
-  });
-  const node = el("div", { class: "block" },
-    renderHeader("🔎", `grep "${query}"`, `${results.length} matches`),
-    el("div", { class: "block-body" }, list)
-  );
-  appendBlock(node);
-  registerBlock(id, "search", node, { query, results });
-  return id;
-}
-
-function makeToolBlock(name, summary, body) {
-  const id = newId("tool");
-  const det = el("details", { class: "tool" },
-    el("summary", null, name + "  ", el("span", { style: "color: var(--fg-mute)" }, summary)),
-    el("div", { class: "body" }, body)
-  );
-  const node = el("div", { class: "block" },
-    renderHeader("🔧", "tool call"),
-    el("div", { class: "block-body" }, det)
-  );
-  appendBlock(node);
-  registerBlock(id, "tool", node, { name, summary, body });
+/* -- assistant note (small text) -- */
+function renderNote(html) {
+  const id = newId("note");
+  const node = el("div", { class: "note", "data-block-id": id, html });
+  appendComponent(node);
+  blocks.set(id, { id, kind: "note", dom: node, data: { html } });
+  // wire up @id refs inside
+  $$(".ref", node).forEach(r => r.addEventListener("click", () => scrollToBlock(r.dataset.id)));
   return id;
 }
 
 /* =========================================================
-   right-click context menu — the killer feature
+   right-click menu
    ========================================================= */
 let menuTarget = null;
 function openContextMenu(ev) {
   ev.preventDefault();
   ev.stopPropagation();
-  const blockEl = ev.currentTarget;
-  menuTarget = blocks.get(blockEl.dataset.blockId);
+  const id = ev.currentTarget.dataset.blockId;
+  menuTarget = blocks.get(id);
+  if (!menuTarget) return;
   const m = $("#ctx-menu");
   m.innerHTML = "";
-  const items = contextActionsFor(menuTarget);
-  items.forEach(it => {
+  contextActionsFor(menuTarget).forEach(it => {
     if (it === "-") { m.append(el("hr")); return; }
-    m.append(el("button", { class: it.danger ? "danger" : "", onclick: () => { it.run(); closeContextMenu(); } },
+    m.append(el("button", { onclick: () => { it.run(); closeContextMenu(); } },
       el("span", null, it.label),
       it.kbd ? el("span", { class: "kbd" }, it.kbd) : null
     ));
   });
   m.style.display = "block";
-  // position
-  const x = Math.min(ev.clientX, window.innerWidth - 240);
-  const y = Math.min(ev.clientY, window.innerHeight - m.offsetHeight - 10);
-  m.style.left = x + "px";
-  m.style.top  = y + "px";
+  m.style.left = Math.min(ev.clientX, window.innerWidth - 260) + "px";
+  m.style.top  = Math.min(ev.clientY, window.innerHeight - m.offsetHeight - 10) + "px";
 }
 function closeContextMenu() { $("#ctx-menu").style.display = "none"; menuTarget = null; }
 document.addEventListener("click", closeContextMenu);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeContextMenu(); });
 
 function contextActionsFor(b) {
-  if (!b) return [];
   const common = [
-    { label: "Ask claude about this block",   kbd: "↩",     run: () => askAbout(b) },
-    { label: "Reference in next message",     kbd: "@",     run: () => referenceBlock(b) },
+    { label: "Ask claude about this",        kbd: "↩", run: () => askAbout(b) },
+    { label: "Reference in next prompt",     kbd: "@", run: () => referenceBlock(b) },
     "-",
-    { label: "Copy as text",                                run: () => navigator.clipboard?.writeText(blockAsText(b)) },
-    { label: "Pin to top",                                  run: () => pinBlock(b) },
+    { label: "Copy",                                   run: () => navigator.clipboard?.writeText(JSON.stringify(b.data, null, 2)) },
   ];
   const extras = {
-    edit:     [{ label: "Show full file",          run: () => makeAssistantBlock(`Opening <code class="inline">${b.data.filename}</code> in a side panel… (mock)`) },
-               { label: "Revert this edit", danger: true, run: () => makeAssistantBlock(`Reverted the edit to <code class="inline">${b.data.filename}</code>. (mock)`) }],
-    term:     [{ label: "Re-run command",          run: () => makeTerminalBlock(b.data.cmd) },
-               { label: "Explain this output",     run: () => askAbout(b, "Explain what this output means.") }],
-    tests:    [{ label: "Re-run failing tests",    run: () => makeAssistantBlock("Re-running the 1 failing test… (mock)") },
-               { label: "Why did this fail?",      run: () => askAbout(b, "Why did the failing test fail and how do I fix it?") }],
-    plan:     [{ label: "Re-plan from here",       run: () => askAbout(b, "Reconsider the plan from this point.") }],
-    question: [{ label: "I'll decide later",       run: () => makeAssistantBlock("Okay — leaving the question open. I'll keep working on the rest.") }],
-    search:   [{ label: "Refine this search",      run: () => askAbout(b, "Narrow this search to just src/payments.") }],
-    user:     [{ label: "Edit and resend",         run: () => { $("#composer").value = b.data.text; $("#composer").focus(); } }],
+    plan:    [{ label: "Re-plan from here",            run: () => askAbout(b, "Reconsider the plan from this point.") }],
+    compare: [{ label: "Add another option to compare", run: () => askAbout(b, "Add another option to compare.") }],
+    design:  [{ label: "Generate more design options",  run: () => askAbout(b, "Show me 3 more design directions.") }],
+    code:    [{ label: "Refactor this",                 run: () => askAbout(b, "Refactor this for clarity.") },
+              { label: "Add tests for this",            run: () => askAbout(b, "Write tests for this code.") }],
+    play:    [{ label: "Apply current settings",        run: () => renderNote("Applied animation settings to the codebase. (mock)") }],
+    schema:  [{ label: "Generate migration from this",  run: () => askAbout(b, "Generate a SQL migration from this schema.") }],
+    diff:    [{ label: "Revert this diff",              run: () => renderNote("Reverted (mock).") }],
+    tests:   [{ label: "Re-run failing only",           run: () => renderNote("Re-running failing tests… (mock)") }],
+    prompt:  [{ label: "Edit and resend",               run: () => { $("#composer").value = b.data.text; $("#composer").focus(); } }],
   };
-  return [...(extras[b.type] || []), ...(extras[b.type] ? ["-"] : []), ...common];
+  return [...(extras[b.kind] || []), ...(extras[b.kind] ? ["-"] : []), ...common];
 }
 
-function blockAsText(b) {
-  if (b.type === "user" || b.type === "assistant" || b.type === "thought") return b.data.text;
-  if (b.type === "edit") return `--- ${b.data.filename} ---\n` + b.data.hunks.flatMap(h => h.lines.map(l => l[0] + l[1])).join("\n");
-  if (b.type === "term") return `$ ${b.data.cmd}\n` + b.data.lines.map(l => l.text).join("\n");
-  if (b.type === "tests") return b.data.tests.map(t => `${t.status.toUpperCase()} ${t.name}`).join("\n");
-  return JSON.stringify(b.data, null, 2);
-}
-
-function askAbout(b, defaultPrompt="") {
-  // scroll the block into view + highlight, then put a reference into the composer
-  $$(".block.referenced").forEach(n => n.classList.remove("referenced"));
-  b.dom.classList.add("referenced");
-  b.dom.scrollIntoView({ behavior: "smooth", block: "center" });
-
+function askAbout(b, prefix="") {
+  if (!b) return;
+  scrollToBlock(b.id);
   const c = $("#composer");
-  const ref = `@${b.id}`;
-  c.value = defaultPrompt
-    ? `${ref} ${defaultPrompt}`
-    : `${ref} `;
+  c.value = prefix ? `@${b.id} ${prefix}` : `@${b.id} `;
   c.focus();
   c.setSelectionRange(c.value.length, c.value.length);
 }
-
 function referenceBlock(b) {
   const c = $("#composer");
   c.value += (c.value && !c.value.endsWith(" ") ? " " : "") + `@${b.id} `;
   c.focus();
 }
-
-function pinBlock(b) {
-  // just visual: move clone to top with a "pinned" header
-  makeAssistantBlock(`Pinned <span class="ref">@${b.id}</span> to the top of the session. (mock)`);
-}
-
-/* clicking a @ref inside a message scrolls to that block */
-document.addEventListener("click", e => {
-  const r = e.target.closest(".ref");
-  if (!r) return;
-  const id = r.textContent.replace(/^@/, "");
-  const b = blocks.get(id);
-  if (!b) return;
-  $$(".block.referenced").forEach(n => n.classList.remove("referenced"));
+function scrollToBlock(id) {
+  const b = blocks.get(id); if (!b) return;
+  $$(".component.referenced, .turn-prompt.referenced").forEach(n => n.classList.remove("referenced"));
   b.dom.classList.add("referenced");
   b.dom.scrollIntoView({ behavior: "smooth", block: "center" });
-  setTimeout(() => b.dom.classList.remove("referenced"), 1800);
-});
-
-/* sidebar jump-to */
-$$(".nav-item[data-jump]").forEach(n => n.addEventListener("click", () => {
-  const target = n.dataset.jump;
-  if (target === "end") { const m = $("#main"); m.scrollTop = m.scrollHeight; return; }
-  const node = document.getElementById(target);
-  node?.scrollIntoView({ behavior: "smooth", block: "center" });
-}));
+  setTimeout(() => b.dom.classList.remove("referenced"), 2200);
+}
 
 /* composer */
 const composer = $("#composer");
@@ -853,148 +1036,197 @@ $("#send").addEventListener("click", send);
 function send() {
   const text = composer.value.trim();
   if (!text) return;
-  makeUserBlock(text);
+  startTurn(text);
   composer.value = "";
   composer.style.height = "auto";
-  // mock reply
-  setTimeout(() => makeAssistantBlock("Got it — let me look at that. (mock reply)"), 600);
+  setTimeout(() => renderNote("Got it — looking into that. (mock reply)"), 600);
 }
 
 /* =========================================================
-   the demo "agent run" — fakes a real session so you can play
+   the demo "session" — building a habit tracker, prompt by prompt
    ========================================================= */
 async function demo() {
-  // user request
-  const u = makeUserBlock("the checkout endpoint sometimes double-charges on retry. add idempotency keys.");
-  $(u).id = "user-1";  // wrong, fix
-  blocks.get(u).dom.id = "user-1";
 
-  await sleep(500);
-  makeThoughtBlock("Looking at the retry path in the payment handler. Need to figure out where to thread the key through.");
-
-  await sleep(700);
-  makeSearchBlock("retry", [
-    { file: "src/payments/charge.ts", line: 42, snip: "if (err.code === 'NETWORK') return retry(req)" },
-    { file: "src/payments/charge.ts", line: 88, snip: "// TODO: idempotency on retry" },
-    { file: "src/http/client.ts",     line: 17, snip: "export async function retry<T>(fn: () => Promise<T>) {" },
-  ]);
-
-  await sleep(800);
-  const planId = makePlanBlock("Plan: idempotency keys for /charge", [
-    "Add idempotency_key column to charges table",
-    "Generate UUID per request in handler",
-    "Pass key through to Stripe SDK call",
-    "Short-circuit on duplicate key (return cached response)",
-    "Add tests for retry behavior",
-  ]);
-  blocks.get(planId).dom.id = "plan-1";
-  setPlanActive(planId, 0);
-
+  // Turn 1 — kickoff: ask for a plan
+  startTurn("I want to build a habit tracker web app. React + localStorage to start. Help me plan it.");
   await sleep(900);
-  const t1 = makeTerminalBlock("psql -c \"\\d charges\"");
+  const planId = renderPlan("Build plan: habit tracker", [
+    "Pick storage layer (localStorage vs IndexedDB)",
+    "Design the home screen (3 directions)",
+    "Define data model & schema",
+    "Build the HabitCard component",
+    "Add streak counter with animation",
+    "Wire up check-in interaction",
+    "Write tests",
+    "Polish & ship",
+  ]);
   await sleep(400);
-  termWrite(t1, "                Table \"public.charges\"");
-  termWrite(t1, "    Column     |     Type     | Nullable");
-  termWrite(t1, " --------------+--------------+----------");
-  termWrite(t1, "  id           | uuid         | not null");
-  termWrite(t1, "  amount_cents | integer      | not null");
-  termWrite(t1, "  created_at   | timestamptz  | not null", "dim");
-  await sleep(300);
-  termDone(t1, true);
+  planAdvance(planId, 0);
+  renderNote("I'll work through these top to bottom. Right-click any step to reorder or re-plan.");
 
-  await sleep(500);
-  makeFileEditBlock("migrations/0042_charges_idempotency.sql", [{
-    startLine: 1,
-    lines: [
-      ["+", "ALTER TABLE charges"],
-      ["+", "  ADD COLUMN idempotency_key text UNIQUE;"],
-      ["+", ""],
-      ["+", "CREATE INDEX charges_idem_idx ON charges(idempotency_key);"],
-    ]
-  }]);
-  setPlanDone(planId, 0); setPlanActive(planId, 1);
+  await sleep(1500);
 
+  // Turn 2 — compare storage options
+  startTurn("Compare localStorage vs IndexedDB vs SQLite-wasm for this");
+  await sleep(900);
+  renderCompare("Storage options for habits", ["Setup", "Capacity", "Queryable", "Migrations", "Verdict"], [
+    {
+      option: "localStorage",
+      values: [
+        { text: "trivial",       kind: "ok" },
+        { text: "5 MB",          kind: "med" },
+        { text: "no",            kind: "no" },
+        { text: "manual",        kind: "no" },
+        { text: "fine for v1",   kind: "ok" },
+      ],
+    },
+    {
+      option: "IndexedDB (via Dexie)",
+      values: [
+        { text: "small lib",     kind: "med" },
+        { text: "GBs",           kind: "ok" },
+        { text: "yes (indexes)", kind: "ok" },
+        { text: "supported",     kind: "ok" },
+        { text: "right call",    kind: "ok" },
+      ],
+    },
+    {
+      option: "SQLite-wasm",
+      values: [
+        { text: "heavy",         kind: "no" },
+        { text: "GBs",           kind: "ok" },
+        { text: "full SQL",      kind: "ok" },
+        { text: "manual",        kind: "med" },
+        { text: "overkill",      kind: "no" },
+      ],
+    },
+  ]);
+
+  await sleep(2200);  // simulate user reading + picking
+  await sleep(400);
+  // pretend the user clicked "pick" on row 1 (IndexedDB)
+  const cmpBlock = [...blocks.values()].find(b => b.kind === "compare");
+  pickRow(cmpBlock.id, 1);
+  planAdvance(planId, 1);
+
+  await sleep(1500);
+
+  // Turn 3 — design exploration
+  startTurn("Sketch 3 visual directions for the home screen — I want to compare side by side");
+  await sleep(900);
+  renderDesigns("Home screen — 3 directions", [
+    { name: "List of cards",   tag: "minimal",    mock: mocks.cards },
+    { name: "Calendar grid",   tag: "data-dense", mock: mocks.grid  },
+    { name: "Streak hero",     tag: "playful",    mock: mocks.timeline },
+  ]);
+  renderNote("Click a tile to pick a direction, or right-click to ask for variations.");
+
+  await sleep(2400);
+  const dBlock = [...blocks.values()].find(b => b.kind === "design");
+  pickDesign(dBlock.id, 2);
+  planAdvance(planId, 2);
+
+  await sleep(1500);
+
+  // Turn 4 — schema
+  startTurn("Show me the data schema you'd use");
+  await sleep(900);
+  renderSchema("habits/v1 — schema");
+  renderNote("Tap a table to see what it's for.");
+  planAdvance(planId, 3);
+
+  await sleep(2200);
+
+  // Turn 5 — the actual code
+  startTurn("Generate the HabitCard React component for the streak-hero direction");
+  await sleep(1100);
+  renderCode("src/components/HabitCard.tsx", "tsx", `import { useState } from "react";
+import { useHabit } from "../hooks/useHabit";
+
+interface HabitCardProps {
+  habitId: string;
+}
+
+export function HabitCard({ habitId }: HabitCardProps) {
+  const { habit, streak, checkIn } = useHabit(habitId);
+  const [bumped, setBumped] = useState(false);
+
+  const handleCheckIn = async () => {
+    await checkIn();
+    setBumped(true);
+    setTimeout(() => setBumped(false), 300);
+  };
+
+  return (
+    <div className="habit-card">
+      <div className="name">{habit.name}</div>
+      <div className={\`streak \${bumped ? "bumped" : ""}\`}>
+        <span className="num">{streak.current}</span>
+        <span className="label">day streak</span>
+      </div>
+      <button onClick={handleCheckIn}>I did it today</button>
+    </div>
+  );
+}`);
+  planAdvance(planId, 4);
+
+  await sleep(1500);
+
+  // Turn 6 — animation playground
+  startTurn("Make the streak-counter bump animation tunable so I can dial it in");
+  await sleep(900);
+  renderPlayground("Streak counter animation");
+  renderNote("Drag the sliders, watch the preview, then click <b>Copy as prompt</b> when you like the feel.");
+  planAdvance(planId, 5);
+
+  await sleep(2400);
+
+  // Turn 7 — file tree of what got built
+  startTurn("What does the project look like now?");
+  await sleep(800);
+  renderTree("habits/", [
+    { path: "src",                       kind: "dir" },
+    { path: "src/App.tsx" },
+    { path: "src/components",            kind: "dir" },
+    { path: "src/components/HabitCard.tsx", isNew: true },
+    { path: "src/components/Streak.tsx",    isNew: true },
+    { path: "src/components/CheckInButton.tsx", isNew: true },
+    { path: "src/hooks",                 kind: "dir" },
+    { path: "src/hooks/useHabit.ts",     isNew: true },
+    { path: "src/db",                    kind: "dir" },
+    { path: "src/db/schema.ts",          isNew: true },
+    { path: "src/db/index.ts",           isNew: true },
+    { path: "package.json" },
+  ]);
+
+  await sleep(1500);
+
+  // Turn 8 — run tests
+  startTurn("Run the tests");
   await sleep(700);
-  makeFileEditBlock("src/payments/charge.ts", [{
-    startLine: 38,
-    lines: [
-      [" ", "export async function charge(req: ChargeRequest) {"],
-      ["-", "  const result = await stripe.charges.create({"],
-      ["-", "    amount: req.amount,"],
-      ["-", "    currency: req.currency,"],
-      ["-", "  });"],
-      ["+", "  const key = req.idempotencyKey ?? randomUUID();"],
-      ["+", "  const cached = await db.charges.findByKey(key);"],
-      ["+", "  if (cached) return cached;"],
-      ["+", ""],
-      ["+", "  const result = await stripe.charges.create("],
-      ["+", "    { amount: req.amount, currency: req.currency },"],
-      ["+", "    { idempotencyKey: key },"],
-      ["+", "  );"],
-      [" ", "  return result;"],
-      [" ", "}"],
-    ]
-  }]);
-  setPlanDone(planId, 1); setPlanDone(planId, 2); setPlanActive(planId, 3);
+  const tt = renderTests("vitest", [
+    { name: "HabitCard renders",                status: "run" },
+    { name: "useHabit increments streak",       status: "pend" },
+    { name: "useHabit resets on missed day",    status: "pend" },
+    { name: "Streak animation triggers",        status: "pend" },
+  ]);
+  await sleep(700); setTest(tt, "HabitCard renders", "pass", "8ms"); setTest(tt, "useHabit increments streak", "run");
+  await sleep(700); setTest(tt, "useHabit increments streak", "pass", "21ms"); setTest(tt, "useHabit resets on missed day", "run");
+  await sleep(700); setTest(tt, "useHabit resets on missed day", "pass", "18ms"); setTest(tt, "Streak animation triggers", "run");
+  await sleep(700); setTest(tt, "Streak animation triggers", "pass", "31ms");
+  finishTests(tt);
+  planAdvance(planId, 6);
 
   await sleep(800);
-  makeQuestionBlock(
-    "Two ways to handle a duplicate key on a different amount — pick one:",
-    [
-      { label: "Reject with 409 Conflict",   desc: "Strict: amount mismatch on a reused key is a client bug." },
-      { label: "Return the original charge", desc: "Lenient: matches Stripe's own behavior, ignores the new amount." },
-    ]
-  );
-
-  await sleep(900);
-  makeFileEditBlock("src/payments/charge.test.ts", [{
-    startLine: 1,
-    lines: [
-      ["+", "test(\"double-submit returns cached charge\", async () => {"],
-      ["+", "  const key = randomUUID();"],
-      ["+", "  const a = await charge({ amount: 500, idempotencyKey: key });"],
-      ["+", "  const b = await charge({ amount: 500, idempotencyKey: key });"],
-      ["+", "  expect(a.id).toBe(b.id);"],
-      ["+", "});"],
-    ]
-  }]);
-  setPlanDone(planId, 3); setPlanActive(planId, 4);
-
-  await sleep(600);
-  const tests = makeTestsBlock("vitest src/payments", [
-    { name: "charge › creates a charge",              status: "run" },
-    { name: "charge › retries on network error",      status: "pend" },
-    { name: "charge › double-submit returns cached",  status: "pend" },
-    { name: "charge › different amount, same key",    status: "pend" },
-  ]);
-  await sleep(700);
-  setTestStatus(tests, "charge › creates a charge", "pass", "12ms");
-  setTestStatus(tests, "charge › retries on network error", "run");
-  await sleep(700);
-  setTestStatus(tests, "charge › retries on network error", "pass", "44ms");
-  setTestStatus(tests, "charge › double-submit returns cached", "run");
-  await sleep(700);
-  setTestStatus(tests, "charge › double-submit returns cached", "pass", "31ms");
-  setTestStatus(tests, "charge › different amount, same key", "run");
-  await sleep(900);
-  setTestStatus(tests, "charge › different amount, same key", "fail", "18ms");
-  finishTests(tests);
-  setPlanActive(planId, null);
-
-  await sleep(500);
-  makeAssistantBlock(
-    "Migration, handler change, and three of four tests are green. " +
-    "The failing test (<span class='ref'>@" + tests + "</span>) depends on which behavior you pick in " +
-    "<span class='ref'>@q-7</span>. Right-click the test block to ask why it's failing, " +
-    "or pick an option in the question block."
-  );
+  renderNote("All four green. Plan is at 7/8 — only <b>polish & ship</b> left. Try right-clicking any component above (the <span class='ref' data-id='" + planId + "'>plan</span>, the <span class='ref' data-id='" + dBlock.id + "'>design grid</span>, the playground) and ask me something specific.");
+  // wire ref clicks
+  $$(".note .ref").forEach(r => {
+    if (!r.dataset.id) return;
+    r.addEventListener("click", () => scrollToBlock(r.dataset.id));
+  });
 
   $("#live-pill").textContent = "idle";
   $("#live-pill").classList.remove("live");
-
-  // mark end
-  const end = el("div", { id: "end", style: "height: 1px;" });
-  $("#stream").append(end);
 }
 
 demo();
