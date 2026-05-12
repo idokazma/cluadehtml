@@ -10,7 +10,9 @@
   "scripts": {
     "start": "node bin/stack.mjs",
     "replay": "node bin/stack.mjs run --replay fixtures/habits-day1.jsonl",
-    "test": "node test/smoke.mjs"
+    "test": "node --test test/*.test.mjs",
+    "test:unit": "node --test test/normalize.test.mjs test/prefilter.test.mjs test/interface-agent.test.mjs test/synthesize.test.mjs test/log.test.mjs",
+    "test:smoke": "node --test test/smoke.test.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -129,11 +129,30 @@ claude -p stream-json (or replay)
   that across sessions is the next layer.
 - **Snapshot HTML export** is not implemented.
 
-## Verify it works
+## Tests
+
+```sh
+npm test           # all (~30s — includes the smoke test)
+npm run test:unit  # unit tests only (~1s)
+npm run test:smoke # end-to-end through the HTTP server (~25s)
+```
+
+Coverage:
+
+| File | Covers |
+| --- | --- |
+| `test/normalize.test.mjs` | wire-envelope shapes → flat `AgentEvent` |
+| `test/prefilter.test.mjs` | activity vs auto-commit; `TodoWrite` patch-in-place |
+| `test/interface-agent.test.mjs` | `Edit`/`Write` → diff; numbered-options text → decision; long-running `Bash` → streaming terminal; short summaries → note; long prose ignored |
+| `test/synthesize.test.mjs` | each `UserAction` kind → the right synthesized message |
+| `test/log.test.mjs` | activity events not persisted; commits persisted in order |
+| `test/smoke.test.mjs` | full pipeline through the live HTTP server: replay fixture → exact component types & counts; `POST /api/action` round-trips a decision pick into a synthesized prompt |
+
+## Verify it works manually
 
 ```sh
 node bin/stack.mjs run --replay fixtures/habits-day1.jsonl &
-sleep 2 && curl -s http://localhost:3737/api/state | head -50
+sleep 18 && curl -s http://localhost:3737/api/state | head -50
 ```
 
 You should see a Map of components with one `prompt`, one `plan` (with
