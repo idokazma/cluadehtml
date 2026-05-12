@@ -61,6 +61,46 @@ const renderers = {
   },
   diff: {
     mount: (c) => {
+      // When classified (kind + headline), render a vivid change card;
+      // the raw line-level diff is collapsed underneath.
+      if (c.props.kind && c.props.headline) {
+        const wrap = el("div", { class: "diff" });
+        const collapsible = el("div", { class: "diff-collapsible" }, wrap);
+        let shown = false;
+        const toggle = el("button", { class: "show-diff", onclick: () => {
+          shown = !shown;
+          collapsible.classList.toggle("show", shown);
+          toggle.textContent = shown ? "▴ Hide diff" : "▾ Show diff";
+        }}, "▾ Show diff");
+
+        const dom = el("div", { class: "component" },
+          header(c.props.icon || "✎", "change", shortNameFromPath(c.props.filename)),
+          el("div", { class: "change-card" },
+            el("div", { class: `kind-icon ${c.props.kind}` }, c.props.icon || "✎"),
+            el("div", { class: "body" },
+              el("div", { class: "headline" }, c.props.headline),
+              el("div", { class: "file-row" },
+                el("span", { class: `kind-tag ${c.props.kind}` }, c.props.kind.replace("-", " ")),
+                el("span", { class: "file" }, c.props.filename || ""),
+              ),
+              c.props.before || c.props.after
+                ? el("div", { class: "before-after" },
+                    c.props.before ? el("div", { class: "label" }, "Before") : null,
+                    c.props.before ? el("div", { class: "before-text" }, c.props.before) : null,
+                    c.props.after  ? el("div", { class: "label" }, "After")  : null,
+                    c.props.after  ? el("div", { class: "after-text" }, c.props.after) : null,
+                  )
+                : null,
+              toggle,
+            ),
+          ),
+          collapsible,
+        );
+        renderDiff(dom, c);
+        return dom;
+      }
+
+      // Unclassified fallback — plain diff lines.
       const dom = el("div", { class: "component" },
         header("✎", "diff", c.props.filename || "(file)"),
         el("div", { class: "diff" }),
@@ -479,6 +519,12 @@ function renderPreview(dom, c) {
     else if (el2.type === "block") frame.append(el("div", { class: "pv-block" }, el2.text));
   }
   body.append(frame);
+}
+
+function shortNameFromPath(p) {
+  if (!p) return "(file)";
+  const parts = p.split("/");
+  return parts[parts.length - 1] || p;
 }
 
 function kindGlyph(kind) {

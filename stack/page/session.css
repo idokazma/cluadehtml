@@ -154,7 +154,64 @@ main { overflow-y: auto; padding: 18px 20px 16px; scroll-behavior: smooth; }
   animation: note-in 380ms cubic-bezier(.2,.8,.2,1) both; }
 @keyframes note-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-/* tests panel */
+/* diff (rich change card when classified; falls back to raw lines) */
+.change-card {
+  display: flex; gap: 14px; padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.change-card .kind-icon {
+  width: 44px; height: 44px; border-radius: 10px;
+  flex-shrink: 0; display: grid; place-items: center;
+  font-size: 22px;
+  background: var(--bg-3); border: 1px solid var(--line-2);
+  animation: change-pop 380ms cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes change-pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.change-card .kind-icon.bug-fix  { background: #3a1c1c; border-color: #5a2c2c; }
+.change-card .kind-icon.feature  { background: #2a4a3a; border-color: #3a5a4a; }
+.change-card .kind-icon.wiring   { background: #14223a; border-color: #2a3a4a; }
+.change-card .kind-icon.refactor { background: #1f1a2e; border-color: #2f2a3e; }
+.change-card .kind-icon.config   { background: #2a1f12; border-color: #4a3024; }
+.change-card .body { flex: 1; min-width: 0; }
+.change-card .headline {
+  font-size: 15px; font-weight: 600; color: var(--fg);
+  line-height: 1.35; margin-bottom: 4px;
+}
+.change-card .file-row {
+  display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--fg-mute); margin-bottom: 8px;
+}
+.change-card .file-row .file { font-family: var(--mono); color: var(--fg-dim); }
+.change-card .file-row .kind-tag {
+  font-family: var(--mono); font-size: 10px; padding: 1px 6px; border-radius: 3px;
+  background: var(--bg-3); color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.06em;
+}
+.change-card .kind-tag.bug-fix  { background: #3a1c1c; color: #ff9d9d; }
+.change-card .kind-tag.feature  { background: #2a4a3a; color: #9bf0bb; }
+.change-card .kind-tag.wiring   { background: #14223a; color: #9dc5ff; }
+.change-card .kind-tag.refactor { background: #1f1a2e; color: #c9b5ff; }
+.change-card .kind-tag.config   { background: #2a1f12; color: #ffd6a0; }
+.change-card .before-after {
+  display: grid; grid-template-columns: 56px 1fr; gap: 8px 12px;
+  margin-top: 4px; font-size: 12.5px;
+}
+.change-card .before-after .label {
+  font-size: 10.5px; color: var(--fg-mute); text-transform: uppercase;
+  letter-spacing: 0.06em; padding-top: 2px; font-family: var(--mono);
+}
+.change-card .before-after .before-text {
+  color: var(--fg-dim); text-decoration: line-through; text-decoration-color: #e26a6a66;
+}
+.change-card .before-after .after-text {
+  color: var(--fg); font-weight: 500;
+}
+.change-card .show-diff {
+  margin-top: 12px;
+  background: transparent; border: 0; color: var(--fg-mute);
+  cursor: pointer; padding: 0; font-size: 11.5px;
+}
+.change-card .show-diff:hover { color: var(--fg); }
+.diff-collapsible { display: none; }
+.diff-collapsible.show { display: block; }
 .tests { display: flex; flex-direction: column; gap: 3px; padding: 6px 0; }
 .test {
   display: flex; align-items: center; gap: 10px;

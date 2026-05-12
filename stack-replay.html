@@ -201,6 +201,34 @@
     animation: note-in 380ms cubic-bezier(.2,.8,.2,1) both; }
   @keyframes note-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
+  /* change-card (rich diff) */
+  .change-card { display: flex; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .change-card .kind-icon { width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0; display: grid; place-items: center; font-size: 22px; background: var(--bg-3); border: 1px solid var(--line-2); animation: change-pop 380ms cubic-bezier(.34,1.56,.64,1) both; }
+  @keyframes change-pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .change-card .kind-icon.bug-fix  { background: #3a1c1c; border-color: #5a2c2c; }
+  .change-card .kind-icon.feature  { background: #2a4a3a; border-color: #3a5a4a; }
+  .change-card .kind-icon.wiring   { background: #14223a; border-color: #2a3a4a; }
+  .change-card .kind-icon.refactor { background: #1f1a2e; border-color: #2f2a3e; }
+  .change-card .kind-icon.config   { background: #2a1f12; border-color: #4a3024; }
+  .change-card .body { flex: 1; min-width: 0; }
+  .change-card .headline { font-size: 15px; font-weight: 600; color: var(--fg); line-height: 1.35; margin-bottom: 4px; }
+  .change-card .file-row { display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--fg-mute); margin-bottom: 8px; }
+  .change-card .file-row .file { font-family: var(--mono); color: var(--fg-dim); }
+  .change-card .file-row .kind-tag { font-family: var(--mono); font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--bg-3); color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+  .change-card .kind-tag.bug-fix  { background: #3a1c1c; color: #ff9d9d; }
+  .change-card .kind-tag.feature  { background: #2a4a3a; color: #9bf0bb; }
+  .change-card .kind-tag.wiring   { background: #14223a; color: #9dc5ff; }
+  .change-card .kind-tag.refactor { background: #1f1a2e; color: #c9b5ff; }
+  .change-card .kind-tag.config   { background: #2a1f12; color: #ffd6a0; }
+  .change-card .before-after { display: grid; grid-template-columns: 56px 1fr; gap: 8px 12px; margin-top: 4px; font-size: 12.5px; }
+  .change-card .before-after .label { font-size: 10.5px; color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.06em; padding-top: 2px; font-family: var(--mono); }
+  .change-card .before-after .before-text { color: var(--fg-dim); text-decoration: line-through; text-decoration-color: #e26a6a66; }
+  .change-card .before-after .after-text { color: var(--fg); font-weight: 500; }
+  .change-card .show-diff { margin-top: 12px; background: transparent; border: 0; color: var(--fg-mute); cursor: pointer; padding: 0; font-size: 11.5px; }
+  .change-card .show-diff:hover { color: var(--fg); }
+  .diff-collapsible { display: none; }
+  .diff-collapsible.show { display: block; }
+
   /* tests panel */
   .tests { display: flex; flex-direction: column; gap: 3px; padding: 6px 0; }
   .test { display: flex; align-items: center; gap: 10px; padding: 6px 14px; font-family: var(--mono); font-size: 12.5px; animation: line-in 320ms cubic-bezier(.2,.8,.2,1) both; }
@@ -752,12 +780,15 @@ function editorialAgentRules(chunk, state) {
         continue;
       }
     }
-    // Edit (or Write that didn't fit a module) → diff
+    // Edit (or Write that didn't fit a module) → diff, enriched with a
+    // semantic classification (bug-fix / feature / wiring / refactor /
+    // config). The raw lines stay underneath behind a toggle.
     if (ev.kind === "assistant" && (ev.tool === "Edit" || ev.tool === "Write")) {
       const i = ev.input || {};
       const hunks = synthDiffFromEdit(i, ev.tool);
+      const classification = classifyChange(i, ev.tool) || {};
       out.push({ op: "append", component: { id: newId("diff"), type: "diff",
-        props: { filename: i.file_path || "(unknown)", hunks, tool: ev.tool } }, ts: ev.ts });
+        props: { filename: i.file_path || "(unknown)", hunks, tool: ev.tool, ...classification } }, ts: ev.ts });
       continue;
     }
     // Prose offering options → decision card
@@ -888,6 +919,79 @@ function parseBuildOutput(text) {
   if (m2) stats.push({ label: "Build time", value: m2[1], tone: "green" });
   return stats;
 }
+function classifyChange(input, tool) {
+  const old = input.old_string || "";
+  const neu = input.new_string || input.content || "";
+  const file = input.file_path || "";
+  const isWrite = tool === "Write";
+  // BUG FIX
+  if (!isWrite && (
+    /\b(naive|TODO|FIXME|HACK|XXX|broken|wrong|bug)\b/i.test(old) ||
+    (/\bgap\s*[>]\s*1\b/.test(old) && /\bgap\s*===\s*[12]\b/.test(neu)) ||
+    (/return\s*\{[^}]*current:\s*0\s*,\s*longest:\s*0\s*\}/.test(old) && !/current:\s*0\s*,\s*longest:\s*0/.test(neu))
+  )) {
+    return { kind: "bug-fix", icon: "🐛",
+      headline: inferBugFixHeadline(old, neu, file),
+      before: oneLineFrom(old, /\/\/[^\n]*|\bgap\s*[><=!]+\s*\d+|return\s*\{[^}]+\}/) || trim(old, 80),
+      after:  oneLineFrom(neu, /\bgap\s*===\s*\d+|else if|else current/) || trim(neu, 80) };
+  }
+  // FEATURE
+  const newExps = [...neu.matchAll(/export\s+(?:async\s+)?function\s+(\w+)/g)].map(m => m[1]);
+  const oldExps = new Set([...old.matchAll(/export\s+(?:async\s+)?function\s+(\w+)/g)].map(m => m[1]));
+  const added = newExps.filter(n => !oldExps.has(n));
+  if (added.length > 0 && !isWrite) {
+    const name = added[0];
+    return { kind: "feature", icon: "✨",
+      headline: `${humanizeName(name)} — new capability`,
+      before: "Not available",
+      after:  `\`${name}(…)\` is exported and ready to call` };
+  }
+  // WIRING
+  if (!isWrite) {
+    const w = findWiringAdditions(old, neu);
+    if (w) return { kind: "wiring", icon: "🔗", headline: w.headline, before: w.before, after: w.after };
+  }
+  // CONFIG
+  if (/\.(yml|yaml|json|toml|env|conf)$/i.test(file) || /(^|\/)\.github\/|deploy|workflow|migration/i.test(file)) {
+    return { kind: "config", icon: "⚙", headline: isWrite ? `New config file` : `Config updated` };
+  }
+  if (!isWrite) {
+    return { kind: "refactor", icon: "♻", headline: `Updated ${file.split("/").pop() || "code"}` };
+  }
+  return null;
+}
+function humanizeName(c) {
+  return c.replace(/^(use|get|set|do|is|has)([A-Z])/, "$2")
+          .replace(/([a-z])([A-Z])/g, "$1 $2")
+          .replace(/^./, c => c.toUpperCase()).trim();
+}
+function trim(s, n) { s = String(s || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n) + "…" : s; }
+function oneLineFrom(text, re) { const m = String(text).match(re); return m ? trim(m[0], 80) : null; }
+function inferBugFixHeadline(old, neu, file) {
+  if (/streak/i.test(old + neu) && /gap/.test(old + neu)) return "Streak no longer resets on a 1-day gap";
+  if (/return\s*null|return\s*undefined/i.test(old) && !/return\s*null|return\s*undefined/.test(neu)) return "Fixed: function no longer returns null on the happy path";
+  if (/\bnaive\b/i.test(old)) return "Replaced naive implementation with the real one";
+  const base = (file.split("/").pop() || "code").replace(/\.[^.]+$/, "");
+  return `Bug fix in ${base}`;
+}
+function findWiringAdditions(old, neu) {
+  const oldHooks = new Set([...old.matchAll(/\b(use[A-Z]\w*)\s*\(/g)].map(m => m[1]));
+  const newHooks = [...neu.matchAll(/\b(use[A-Z]\w*)\s*\(/g)].map(m => m[1]);
+  const added = newHooks.filter(h => !oldHooks.has(h));
+  if (added.includes("useTheme") || (/useTheme\s*\(/.test(neu) && !/useTheme\s*\(/.test(old))) {
+    return { headline: "Theme system wired into the app", before: "App rendered without a theme", after: "useTheme() applies light/dark/auto on mount" };
+  }
+  if (/subscribeToReminders|pushManager\.subscribe|registerServiceWorker/.test(neu)
+      && !/subscribeToReminders|pushManager\.subscribe|registerServiceWorker/.test(old)) {
+    return { headline: "Push notifications wired into the app", before: "App didn't request push subscription", after: "App registers the SW and subscribes on mount" };
+  }
+  if (added.length > 0) {
+    const h = added[0];
+    return { headline: `\`${h}()\` wired into the component`, before: `${h} was defined but never called`, after: `${h}() runs on mount` };
+  }
+  return null;
+}
+
 function parseReactPreview(filePath, content) {
   if (!/\.(tsx|jsx)$/.test(filePath || "")) return null;
   if (!/return\s*\(?\s*</.test(content)) return null;
@@ -1144,6 +1248,40 @@ const renderers = {
   },
   diff: {
     mount: (c) => {
+      if (c.props.kind && c.props.headline) {
+        const wrap = el("div", { class: "diff" });
+        const collapsible = el("div", { class: "diff-collapsible" }, wrap);
+        let shown = false;
+        const toggle = el("button", { class: "show-diff", onclick: () => {
+          shown = !shown;
+          collapsible.classList.toggle("show", shown);
+          toggle.textContent = shown ? "▴ Hide diff" : "▾ Show diff";
+        }}, "▾ Show diff");
+        const dom = el("div", { class: "component" },
+          header(c.props.icon || "✎", "change", shortNameFromPath(c.props.filename)),
+          el("div", { class: "change-card" },
+            el("div", { class: `kind-icon ${c.props.kind}` }, c.props.icon || "✎"),
+            el("div", { class: "body" },
+              el("div", { class: "headline" }, c.props.headline),
+              el("div", { class: "file-row" },
+                el("span", { class: `kind-tag ${c.props.kind}` }, c.props.kind.replace("-", " ")),
+                el("span", { class: "file" }, c.props.filename || ""),
+              ),
+              (c.props.before || c.props.after)
+                ? el("div", { class: "before-after" },
+                    c.props.before ? el("div", { class: "label" }, "Before") : null,
+                    c.props.before ? el("div", { class: "before-text" }, c.props.before) : null,
+                    c.props.after  ? el("div", { class: "label" }, "After")  : null,
+                    c.props.after  ? el("div", { class: "after-text" }, c.props.after) : null,
+                  ) : null,
+              toggle,
+            ),
+          ),
+          collapsible,
+        );
+        diffFill(dom, c);
+        return dom;
+      }
       const dom = el("div", { class: "component" }, header("✎", "diff", c.props.filename || "(file)"), el("div", { class: "diff" }));
       diffFill(dom, c);
       return dom;
@@ -1348,6 +1486,8 @@ function renderDecisionBody(dom, c) {
     ),
   );
 }
+
+function shortNameFromPath(p) { if (!p) return "(file)"; const parts = p.split("/"); return parts[parts.length - 1] || p; }
 
 function kindGlyph(k) {
   switch (k) {

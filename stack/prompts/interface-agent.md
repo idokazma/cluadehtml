@@ -101,16 +101,34 @@ data model* — those go to `schema`. DO NOT USE for binary files or
 content we can't parse.
 
 ### `diff`
-A unified diff against a file. Props: `{ filename, hunks: [{ startLine,
-lines: [[ "+"|"-"|" ", text ]] }] }`.
+A *change card* — what the change MEANS, not just the line-level
+delta. Props: `{ filename, hunks, kind?, icon?, headline?, before?,
+after? }`. The `kind` is one of:
+- `"bug-fix"` 🐛 — a flaw was repaired (condition flipped, naive impl
+  replaced, null-return fixed, off-by-one corrected)
+- `"feature"` ✨ — a new capability shipped (new top-level export,
+  new public function, new endpoint)
+- `"wiring"` 🔗 — an existing capability got hooked up (a hook called,
+  a subscriber registered, a route added)
+- `"refactor"` ♻ — structure or naming changed; no user-visible effect
+- `"config"` ⚙ — yaml / json / .env / migration touched
 
-USE when: an `Edit` changed an existing file. The user wants to see
-*what* changed, not what now exists — so the diff is the right surface.
-USE also when a Write produced something we couldn't parse into a
-`module`.
-DO NOT USE: for code being shown for review (use `code` for that).
+When classifying, write a **headline** in plain English that names
+*what the change does for the user*, not the syntax:
+  - ✓ "Streak no longer resets on a 1-day gap"  (bug-fix)
+  - ✓ "Streak freeze — new capability"          (feature)
+  - ✓ "Push notifications wired into the app"   (wiring)
+  - ✗ "Updated useHabit.ts"                     (technical, useless)
+
+When possible also include **before** / **after** one-liners that
+contrast the old and new behaviour — not the old and new code. The
+raw diff stays available behind a toggle, but the headline + the
+before/after is the surface.
+
+USE when: an `Edit` changed an existing file. USE also when a Write
+produced something we couldn't parse into a `module`.
 DO NOT USE: for new-file Writes that fit a `module` or `schema` — those
-are richer.
+are richer surfaces.
 
 ### `code`
 A syntax-highlighted snippet, with copy / edit-and-reprompt actions.

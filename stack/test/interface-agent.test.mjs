@@ -166,6 +166,82 @@ test("Edit (not Write) still produces a diff — we want to see what changed in 
   assert.equal(out[0].component.type, "diff");
 });
 
+test("Edit with a 'naive' / 'gap > 1' pattern is classified as a bug-fix with a headline", () => {
+  const ev = {
+    kind: "assistant", tool: "Edit", tool_use_id: "tu_e",
+    input: {
+      file_path: "src/hooks/useHabit.ts",
+      old_string: "// naive: gap > 1 day resets the streak.\n  let current = 0;\n  return { current, longest: 0 };",
+      new_string: "if (gap === 0) continue;\nif (gap === 1) current += 1;\nelse if (gap === 2) {} else current = 1;",
+    },
+    ts: 1,
+  };
+  const props = editorialAgentRules([ev], {})[0].component.props;
+  assert.equal(props.kind, "bug-fix");
+  assert.equal(props.icon, "🐛");
+  assert.match(props.headline, /streak/i);
+  assert.match(props.headline, /1-day gap|reset/i);
+  assert.ok(props.before, "should have a before description");
+  assert.ok(props.after, "should have an after description");
+});
+
+test("Edit that introduces a new `export async function X` is classified as a feature", () => {
+  const ev = {
+    kind: "assistant", tool: "Edit", tool_use_id: "tu_e",
+    input: {
+      file_path: "src/hooks/useHabit.ts",
+      old_string: "return { current, longest };\n}",
+      new_string: "return { current, longest };\n}\n\nexport async function freezeStreak(habitId: string) { /* … */ }",
+    },
+    ts: 1,
+  };
+  const props = editorialAgentRules([ev], {})[0].component.props;
+  assert.equal(props.kind, "feature");
+  assert.equal(props.icon, "✨");
+  assert.match(props.headline, /Freeze Streak|Streak/i);
+  assert.match(props.after, /freezeStreak/);
+});
+
+test("Edit that adds a `useTheme()` call is classified as wiring", () => {
+  const ev = {
+    kind: "assistant", tool: "Edit", tool_use_id: "tu_e",
+    input: {
+      file_path: "src/App.tsx",
+      old_string: "function App() {\n  return <Home />;",
+      new_string: "function App() {\n  useTheme();\n  return <Home />;",
+    },
+    ts: 1,
+  };
+  const props = editorialAgentRules([ev], {})[0].component.props;
+  assert.equal(props.kind, "wiring");
+  assert.match(props.headline, /theme/i);
+});
+
+test("Edit that adds subscribeToReminders is classified as wiring (push)", () => {
+  const ev = {
+    kind: "assistant", tool: "Edit", tool_use_id: "tu_e",
+    input: {
+      file_path: "src/App.tsx",
+      old_string: "useTheme();\n  return <Home />;",
+      new_string: "useTheme();\n  useEffect(() => { subscribeToReminders().catch(console.warn); }, []);\n  return <Home />;",
+    },
+    ts: 1,
+  };
+  const props = editorialAgentRules([ev], {})[0].component.props;
+  assert.equal(props.kind, "wiring");
+  assert.match(props.headline, /push notifications/i);
+});
+
+test("Generic Edit with no specific signal falls back to refactor", () => {
+  const ev = {
+    kind: "assistant", tool: "Edit", tool_use_id: "tu_e",
+    input: { file_path: "src/x.ts", old_string: "const a = 1;", new_string: "const a = 2;" },
+    ts: 1,
+  };
+  const props = editorialAgentRules([ev], {})[0].component.props;
+  assert.equal(props.kind, "refactor");
+});
+
 test("text offering numbered options + a question becomes a decision card", () => {
   const ev = {
     kind: "assistant",

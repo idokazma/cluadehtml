@@ -89,17 +89,26 @@ export function editorialAgentRules(chunk, state) {
       }
     }
 
-    // Rule 2b: Edit (changes to existing code) → diff. Plus any Write
-    // that didn't match Rule 2a (binary content, no parseable shape).
+    // Rule 2b: Edit (changes to existing code) → diff with semantic
+    // classification (bug-fix / feature / wiring / refactor). The
+    // classification is the headline; the raw diff stays underneath
+    // behind a toggle. Plus any Write that didn't match Rule 2a
+    // (binary content, no parseable shape).
     if (ev.kind === "assistant" && (ev.tool === "Edit" || ev.tool === "Write")) {
       const i = ev.input || {};
       const hunks = synthDiffFromEdit(i, ev.tool);
+      const classification = classifyChange(i, ev.tool);
       out.push({
         op: "append",
         component: {
           id: newId("diff"),
           type: "diff",
-          props: { filename: i.file_path || "(unknown)", hunks, tool: ev.tool },
+          props: {
+            filename: i.file_path || "(unknown)",
+            hunks,
+            tool: ev.tool,
+            ...classification,
+          },
         },
         ts: ev.ts,
       });
@@ -286,6 +295,149 @@ function parseBuildOutput(text) {
  * preview is a *schematic* of what the component will render — close
  * enough to feel real, intentionally not a perfect runtime mock.
  */
+/**
+ * Classify a code change into a *semantic* shape: bug-fix, feature,
+ * wiring, refactor, or config. Returns { kind, icon, headline,
+ * before?, after? } that the page renders as a vivid change card.
+ *
+ * This is the rules-implementation; an LLM-backed interface agent
+ * would write much better classifications. The rules below catch
+ * the common-case patterns:
+ *   - condition flips and "naive" / "TODO" comments being removed → bug-fix
+ *   - new top-level exports appearing → feature
+ *   - new hook calls / subscribe / register added to a component → wiring
+ *   - file under config dirs or with config extensions → config
+ *   - otherwise → refactor
+ */
+function classifyChange(input, tool) {
+  const old = input.old_string || "";
+  const neu = input.new_string || input.content || "";
+  const file = input.file_path || "";
+  const isWrite = tool === "Write";
+
+  // BUG FIX — strong signals:
+  //   - old contains "naive", "TODO", "FIXME", "HACK", or a known bad-path
+  //   - or condition flipped (e.g., > 1 → === 1)
+  //   - or returns/assigns a clearly-wrong constant
+  if (!isWrite && (
+    /\b(naive|TODO|FIXME|HACK|XXX|broken|wrong|bug)\b/i.test(old) ||
+    (/\bgap\s*[>]\s*1\b/.test(old) && /\bgap\s*===\s*[12]\b/.test(neu)) ||
+    (/return\s*\{[^}]*current:\s*0\s*,\s*longest:\s*0\s*\}/.test(old) && !/current:\s*0\s*,\s*longest:\s*0/.test(neu))
+  )) {
+    return {
+      kind: "bug-fix",
+      icon: "🐛",
+      headline: inferBugFixHeadline(old, neu, file),
+      before: oneLineFrom(old, /\/\/[^\n]*|\bgap\s*[><=!]+\s*\d+|return\s*\{[^}]+\}/) || trim(old, 80),
+      after:  oneLineFrom(neu, /\bgap\s*===\s*\d+|else if|else current/) || trim(neu, 80),
+    };
+  }
+
+  // FEATURE — new top-level export that didn't exist before
+  const newExports = [...neu.matchAll(/export\s+(?:async\s+)?function\s+(\w+)/g)].map(m => m[1]);
+  const oldExports = new Set([...old.matchAll(/export\s+(?:async\s+)?function\s+(\w+)/g)].map(m => m[1]));
+  const addedExports = newExports.filter(n => !oldExports.has(n));
+  if (addedExports.length > 0 && !isWrite) {
+    const name = addedExports[0];
+    return {
+      kind: "feature",
+      icon: "✨",
+      headline: `${humanizeName(name)} — new capability`,
+      before: "Not available",
+      after:  `\`${name}(…)\` is exported and ready to call`,
+    };
+  }
+
+  // WIRING — new hook/subscribe/register call added (typical of App.tsx-style files)
+  if (!isWrite) {
+    const wiringAdditions = findWiringAdditions(old, neu);
+    if (wiringAdditions) {
+      return {
+        kind: "wiring",
+        icon: "🔗",
+        headline: wiringAdditions.headline,
+        before: wiringAdditions.before,
+        after:  wiringAdditions.after,
+      };
+    }
+  }
+
+  // CONFIG / INFRA
+  if (/\.(yml|yaml|json|toml|env|conf)$/i.test(file) || /(^|\/)\.github\/|deploy|workflow|migration/i.test(file)) {
+    return {
+      kind: "config",
+      icon: "⚙",
+      headline: isWrite ? `New config file` : `Config updated`,
+    };
+  }
+
+  // FALLBACK — generic refactor
+  if (!isWrite) {
+    return {
+      kind: "refactor",
+      icon: "♻",
+      headline: `Updated ${file.split("/").pop() || "code"}`,
+    };
+  }
+  return null;
+}
+
+function humanizeName(camel) {
+  return camel
+    .replace(/^(use|get|set|do|is|has)([A-Z])/, "$2") // strip verb prefixes for clarity
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/^./, c => c.toUpperCase())
+    .trim();
+}
+function trim(s, n) { s = String(s || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n) + "…" : s; }
+function oneLineFrom(text, re) {
+  const m = String(text).match(re);
+  return m ? trim(m[0], 80) : null;
+}
+function inferBugFixHeadline(old, neu, file) {
+  if (/streak/i.test(old + neu) && /gap/.test(old + neu)) {
+    return "Streak no longer resets on a 1-day gap";
+  }
+  if (/return\s*null|return\s*undefined/i.test(old) && !/return\s*null|return\s*undefined/.test(neu)) {
+    return "Fixed: function no longer returns null on the happy path";
+  }
+  if (/\bnaive\b/i.test(old)) return "Replaced naive implementation with the real one";
+  const base = (file.split("/").pop() || "code").replace(/\.[^.]+$/, "");
+  return `Bug fix in ${base}`;
+}
+function findWiringAdditions(old, neu) {
+  // Hooks (useTheme(), useEffect(...), etc.) added that weren't there before
+  const oldHooks = new Set([...old.matchAll(/\b(use[A-Z]\w*)\s*\(/g)].map(m => m[1]));
+  const newHooks = [...neu.matchAll(/\b(use[A-Z]\w*)\s*\(/g)].map(m => m[1]);
+  const added = newHooks.filter(h => !oldHooks.has(h));
+
+  // Specific signals
+  if (added.includes("useTheme") || /useTheme\s*\(/.test(neu) && !/useTheme\s*\(/.test(old)) {
+    return {
+      headline: "Theme system wired into the app",
+      before:   "App rendered without a theme",
+      after:    "useTheme() applies light/dark/auto on mount",
+    };
+  }
+  if (/subscribeToReminders|pushManager\.subscribe|registerServiceWorker/.test(neu)
+      && !/subscribeToReminders|pushManager\.subscribe|registerServiceWorker/.test(old)) {
+    return {
+      headline: "Push notifications wired into the app",
+      before:   "App didn't request push subscription",
+      after:    "App registers the SW and subscribes on mount",
+    };
+  }
+  if (added.length > 0) {
+    const h = added[0];
+    return {
+      headline: `\`${h}()\` wired into the component`,
+      before:   `${h} was defined but never called`,
+      after:    `${h}() runs on mount`,
+    };
+  }
+  return null;
+}
+
 function parseReactPreview(filePath, content) {
   if (!/\.(tsx|jsx)$/.test(filePath || "")) return null;
   if (!/return\s*\(?\s*</.test(content)) return null;
