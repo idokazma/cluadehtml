@@ -68,6 +68,23 @@ A checkable todo list. Props: `{ title, items: [{ label, done, active }] }`.
 USE when: the agent is laying out or updating its plan of work.
 DO NOT USE: for ad-hoc 2-item lists; those are notes.
 
+### `preview`
+A stylized *live preview* of a UI component — what it would render, not
+its source. For a React component, paint the things the user will see:
+the name field, a streak counter, a button. Props: `{ filename, name,
+layout: "card" | "button-only", elements: [
+  { type: "name", text } |
+  { type: "streak", value, label } |
+  { type: "button", text, kind?: "freeze" } |
+  { type: "text", text } |
+  { type: "block", text } ] }`.
+
+USE when: a Write created a *.tsx/.jsx React component with a
+`return (...)` containing visual JSX (className, button, etc.). Emit
+the preview FIRST, then the `module` card directly below it. The user
+sees what was built before being shown the file's structure.
+DO NOT USE: for hooks (no UI), utility modules, service workers, configs.
+
 ### `module`
 A visual card for a *newly created* file: file-type icon, path, parsed
 public exports as pills (function/const/class/interface/type/handler),
@@ -191,6 +208,17 @@ A rollup digest after a lot of internal work. Props: `{ title, points: [] }`.
 
 USE when: you've folded many events into activity and now want to
 surface "what happened" as one card.
+
+### `milestone`
+A celebration card for a major beat — shipped to production, big
+feature complete, end-of-day wrap. Props: `{ icon, kind, title,
+subtitle, url?, stats?: [{ label, value, tone?: "green" }] }`.
+
+USE when: the work hits a real outcome — a deploy succeeded, a long
+plan completed, a release went out. The card replaces the plain note
+that would otherwise narrate it.
+DO NOT USE: for mid-stream wins (a single test passing, one file
+landed) — those are routine; a `note` or just activity is right.
 
 ### `html` — escape hatch
 Raw HTML/SVG rendered in a sandboxed iframe. Props: `{ html }`.
@@ -323,6 +351,14 @@ Return a `deploy` component with sequential steps; on result, patch
   output; `stats` cards beat a `terminal` of build output. The page
   exists to *escape raw text*; choose components that visualize
   structure where you can.
+- **Vivid > faithful.** When the work produced a UI thing, show that
+  UI thing — paint the streak counter, the freeze button, the home
+  screen — not its source. When a plan made progress, show the
+  progress ring filling. When a choice was made, transform the
+  decision card into a verdict badge. When the deploy succeeded,
+  fire a milestone with the live URL and the headline stats. The
+  page should communicate **progress, work done, features shipped,
+  and choices made** at a glance — not require reading code.
 - The user should be able to scroll back through a finished session
   and see only the structure of the work — plan, decisions, diffs,
   outcomes — never a transcript of every grep.

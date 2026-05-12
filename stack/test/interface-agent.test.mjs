@@ -78,6 +78,84 @@ test("Write of a YAML file produces a module with section pills", () => {
   assert.ok(exports.some(e => e.name === "jobs"));
 });
 
+test("Write of a .tsx React component → emits BOTH a preview AND a module", () => {
+  const ev = {
+    kind: "assistant", tool: "Write", tool_use_id: "tu_w",
+    input: {
+      file_path: "src/components/HabitCard.tsx",
+      content:
+        "export function HabitCard() {\n" +
+        "  return (\n" +
+        "    <div className=\"habit-card\">\n" +
+        "      <div className=\"name\">{habit?.name}</div>\n" +
+        "      <div className={`streak ${b ? 'bumped' : ''}`}>{streak.current} day streak</div>\n" +
+        "      <button onClick={() => x()}>I did it today</button>\n" +
+        "    </div>\n" +
+        "  );\n" +
+        "}",
+    },
+    ts: 1,
+  };
+  const out = editorialAgentRules([ev], {});
+  const types = out.filter(m => m.op === "append").map(m => m.component.type);
+  assert.deepEqual(types, ["preview", "module"]);
+  const preview = out.find(m => m.component?.type === "preview").component;
+  assert.equal(preview.props.name, "HabitCard");
+  const kinds = preview.props.elements.map(e => e.type);
+  assert.ok(kinds.includes("name"));
+  assert.ok(kinds.includes("streak"));
+  assert.ok(kinds.includes("button"));
+  const btn = preview.props.elements.find(e => e.type === "button");
+  assert.equal(btn.text, "I did it today");
+});
+
+test("Write of a single-button component → preview with layout: button-only", () => {
+  const ev = {
+    kind: "assistant", tool: "Write", tool_use_id: "tu_w",
+    input: {
+      file_path: "src/components/FreezeButton.tsx",
+      content: "export function FreezeButton() {\n  return (\n    <button onClick={() => f()}>❄ Freeze today</button>\n  );\n}",
+    },
+    ts: 1,
+  };
+  const out = editorialAgentRules([ev], {});
+  const preview = out.find(m => m.component?.type === "preview").component;
+  assert.equal(preview.props.layout, "button-only");
+  assert.equal(preview.props.elements[0].kind, "freeze");
+});
+
+test("Write of a non-component .ts file → only a module, no preview", () => {
+  const ev = {
+    kind: "assistant", tool: "Write", tool_use_id: "tu_w",
+    input: {
+      file_path: "src/hooks/useTheme.ts",
+      content: "export function useTheme() { return { theme: 'dark' }; }",
+    },
+    ts: 1,
+  };
+  const out = editorialAgentRules([ev], {});
+  assert.equal(out.filter(m => m.component?.type === "preview").length, 0);
+  assert.equal(out.filter(m => m.component?.type === "module").length, 1);
+});
+
+test("'Shipped to habits.app' text → milestone (not a plain note)", () => {
+  const ev = {
+    kind: "assistant",
+    text: "Shipped to habits.app. All 10 plan items complete. 11 / 11 tests green, 82 kB bundle.",
+    ts: 1,
+  };
+  const out = editorialAgentRules([ev], {});
+  const ms = out.find(m => m.component?.type === "milestone");
+  assert.ok(ms, "should commit a milestone");
+  assert.match(ms.component.props.title, /habits\.app/);
+  assert.equal(ms.component.props.url, "https://habits.app");
+  const labels = ms.component.props.stats.map(s => s.label);
+  assert.ok(labels.includes("Plan"));
+  assert.ok(labels.includes("Tests"));
+  assert.ok(labels.includes("Bundle"));
+  assert.equal(out.filter(m => m.component?.type === "note").length, 0, "shouldn't ALSO be a note");
+});
+
 test("Edit (not Write) still produces a diff — we want to see what changed in existing code", () => {
   const ev = {
     kind: "assistant", tool: "Edit", tool_use_id: "tu_e",

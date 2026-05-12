@@ -298,6 +298,63 @@
     background: #08090b; color: #cdd1d8; font-family: var(--mono); font-size: 12px; line-height: 1.5;
     white-space: pre-wrap; border-top: 1px solid var(--line); }
 
+  /* preview — stylized UI rendering */
+  .preview-body { padding: 20px; background: radial-gradient(circle at 30% 30%, #1f2128, var(--bg-2)); display: grid; place-items: center; min-height: 160px; }
+  .preview-frame { background: linear-gradient(180deg, #2a2030 0%, #1f1620 100%); border-radius: 14px; padding: 18px 20px; min-width: 220px; max-width: 340px; box-shadow: 0 10px 30px #0006, 0 0 0 1px #ffffff08; color: #f3ece4; animation: preview-pop 480ms cubic-bezier(.34,1.56,.64,1) both; }
+  @keyframes preview-pop { from { opacity: 0; transform: translateY(8px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .preview-frame.button-only { background: transparent; box-shadow: none; padding: 0; }
+  .preview-frame .pv-name { font-size: 14px; font-weight: 600; color: #f3ece4; margin-bottom: 8px; }
+  .preview-frame .pv-streak { font-family: var(--mono); font-size: 32px; font-weight: 700; color: var(--accent); display: flex; align-items: baseline; gap: 8px; margin: 6px 0 14px; }
+  .preview-frame .pv-streak .lab { font-size: 11px; color: #ffffff88; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+  .preview-frame .pv-streak .flame { font-size: 24px; }
+  .preview-frame .pv-btn { display: inline-block; background: var(--accent); color: #fff; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 160ms; box-shadow: 0 4px 12px #d9775744; border: 0; }
+  .preview-frame .pv-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px #d9775766; }
+  .preview-frame .pv-btn.freeze { background: linear-gradient(135deg, #6b9fff, #4a8aff); box-shadow: 0 4px 12px #6b9fff44; }
+  .preview-frame .pv-toolbar { display: flex; gap: 6px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #ffffff10; }
+  .preview-frame .pv-toolbar .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .preview-frame .pv-toolbar .dot.r { background: #ff5f57; }
+  .preview-frame .pv-toolbar .dot.y { background: #febc2e; }
+  .preview-frame .pv-toolbar .dot.g { background: #28c840; }
+
+  /* enhanced plan with progress ring */
+  .plan-head { display: flex; align-items: center; gap: 14px; padding: 12px 14px 4px; }
+  .plan-ring { width: 48px; height: 48px; flex-shrink: 0; position: relative; }
+  .plan-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .plan-ring .bg { fill: none; stroke: var(--bg-3); stroke-width: 4; }
+  .plan-ring .fg { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 600ms cubic-bezier(.34,1.56,.64,1); }
+  .plan-ring .pct { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--fg); }
+  .plan-head .info { flex: 1; }
+  .plan-head .info .lead { font-weight: 600; font-size: 13.5px; color: var(--fg); }
+  .plan-head .info .sub { color: var(--fg-mute); font-size: 11.5px; margin-top: 2px; font-family: var(--mono); }
+
+  /* decision verdict layout */
+  .decision.resolved .c-head { background: #16241c; border-color: #2c4a36; color: #c5e8d4; }
+  .decision .verdict { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: linear-gradient(135deg, #16241c, var(--bg-2)); border-bottom: 1px solid #2c4a36; }
+  .decision .verdict .vcheck { width: 30px; height: 30px; border-radius: 50%; background: var(--green); display: grid; place-items: center; color: #fff; font-size: 18px; font-weight: 700; box-shadow: 0 0 0 4px #5fb87a22; animation: verdict-pop 460ms cubic-bezier(.34,1.56,.64,1) both; }
+  @keyframes verdict-pop { from { transform: scale(0); } to { transform: scale(1); } }
+  .decision .verdict .vlabel { font-weight: 600; font-size: 14px; color: #f3ece4; }
+  .decision .verdict .vdesc { color: var(--fg-dim); font-size: 12px; margin-top: 2px; }
+  .decision .other-opts { padding: 8px 16px 14px; }
+  .decision .other-opts .others-label { font-size: 10.5px; color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .decision .other-opts .ghost { font-size: 12px; color: var(--fg-mute); text-decoration: line-through; padding: 3px 0; }
+
+  /* milestone */
+  .milestone { background: linear-gradient(135deg, #4a3024 0%, #2a1f12 50%, var(--bg-2) 100%); border-color: #6a4a3a; position: relative; overflow: hidden; }
+  .milestone::before { content: ""; position: absolute; top: -40%; left: -10%; right: -10%; height: 100%; background: radial-gradient(ellipse, var(--accent-soft) 0%, transparent 60%); pointer-events: none; }
+  .milestone .c-head { background: transparent; border-color: #6a4a3a; color: #ffd6b3; }
+  .milestone-body { padding: 16px 18px; display: flex; align-items: center; gap: 16px; position: relative; }
+  .milestone-body .icon { width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, var(--accent), #b85a3e); display: grid; place-items: center; font-size: 28px; box-shadow: 0 8px 24px #d9775744; animation: ms-spin 800ms cubic-bezier(.34,1.56,.64,1) both; }
+  @keyframes ms-spin { from { transform: scale(0) rotate(-180deg); } to { transform: scale(1) rotate(0); } }
+  .milestone-body .text { flex: 1; }
+  .milestone-body .text .h { font-size: 18px; font-weight: 700; color: #fff; }
+  .milestone-body .text .s { color: var(--fg-dim); font-size: 13px; margin-top: 4px; line-height: 1.5; }
+  .milestone-stats { display: flex; gap: 18px; padding: 12px 18px 14px; border-top: 1px solid #4a3024; font-size: 12px; color: var(--fg-dim); }
+  .milestone-stats .ms-stat .v { font-size: 20px; font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; display: block; }
+  .milestone-stats .ms-stat .l { color: var(--fg-mute); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .milestone-stats .ms-stat .v.green { color: var(--green); }
+  .milestone-link { display: inline-block; background: var(--accent); color: #fff; padding: 6px 14px; border-radius: 6px; font-family: var(--mono); font-size: 12px; text-decoration: none; margin-top: 8px; font-weight: 600; box-shadow: 0 4px 12px #d9775744; }
+  .milestone-link:hover { filter: brightness(1.1); }
+
   /* stats cards */
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; padding: 12px; }
   .stat { background: var(--bg-3); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; border: 1px solid transparent; transition: border-color 160ms; }
@@ -680,11 +737,16 @@ function editorialAgentRules(chunk, state) {
         continue;
       }
     }
-    // Write of a source file → module card (file shape, not source)
+    // Write of a source file → emit preview (when JSX parseable) + module card
     if (ev.kind === "assistant" && ev.tool === "Write") {
       const i = ev.input || {};
       const parsed = parseModule(i.file_path, i.content);
       if (parsed) {
+        const preview = parseReactPreview(i.file_path, i.content);
+        if (preview) {
+          out.push({ op: "append", component: { id: newId("pv"), type: "preview",
+            props: { filename: i.file_path, name: preview.name, layout: preview.layout, elements: preview.elements } }, ts: ev.ts });
+        }
         out.push({ op: "append", component: { id: newId("mod"), type: "module",
           props: { filename: i.file_path, lineCount: parsed.lineCount, exports: parsed.exports, source: i.content } }, ts: ev.ts });
         continue;
@@ -759,6 +821,11 @@ function editorialAgentRules(chunk, state) {
         continue;
       }
     }
+    // shipped / live milestone
+    if (ev.kind === "assistant" && ev.text && looksLikeShipMilestone(ev.text)) {
+      out.push({ op: "append", component: { id: newId("ms"), type: "milestone", props: shipMilestoneProps(ev.text) }, ts: ev.ts });
+      continue;
+    }
     // short summary-feeling notes
     if (ev.kind === "assistant" && ev.text && shouldKeepNote(ev.text)) {
       out.push({ op: "append", component: { id: newId("note"), type: "note", props: { text: ev.text } }, ts: ev.ts });
@@ -821,6 +888,49 @@ function parseBuildOutput(text) {
   if (m2) stats.push({ label: "Build time", value: m2[1], tone: "green" });
   return stats;
 }
+function parseReactPreview(filePath, content) {
+  if (!/\.(tsx|jsx)$/.test(filePath || "")) return null;
+  if (!/return\s*\(?\s*</.test(content)) return null;
+  const nameMatch = content.match(/export\s+(?:default\s+)?function\s+(\w+)/);
+  if (!nameMatch) return null;
+  const name = nameMatch[1];
+  const elements = [];
+  if (/className=["']name["']/.test(content)) elements.push({ type: "name", text: "Drink water" });
+  if (/className=[`"'][^"`']*streak/.test(content) || /streak\.current/.test(content)) elements.push({ type: "streak", value: 12, label: "day streak" });
+  for (const m of content.matchAll(/>\s*([^\s<{][^<{}]*?)\s*<\/button>/g)) {
+    const t = m[1].trim();
+    if (!t || t.length > 40) continue;
+    const kind = /freeze|❄/i.test(t) ? "freeze" : null;
+    elements.push({ type: "button", text: t, kind });
+  }
+  if (elements.length === 0) return null;
+  const layout = (elements.length === 1 && elements[0].type === "button") ? "button-only" : "card";
+  return { name, layout, elements };
+}
+
+function looksLikeShipMilestone(text) {
+  if (!text || text.length > 400) return false;
+  return /\b(shipped|deployed|live at|production)\b/i.test(text);
+}
+function shipMilestoneProps(text) {
+  let url = (text.match(/https?:\/\/\S+/) || [])[0];
+  if (!url) {
+    const host = text.match(/(?:shipped to|live at|production:?)\s+([\w-]+(?:\.[\w-]+)+)/i);
+    if (host) url = "https://" + host[1];
+  }
+  const tests = text.match(/(\d+)\s*\/\s*(\d+)\s*tests?\s*green/i);
+  const bundle = text.match(/(\d+(?:\.\d+)?)\s*kB/i);
+  const plan = text.match(/(\d+)\s+plan items?/i);
+  const stats = [];
+  if (plan)   stats.push({ label: "Plan",   value: plan[1] + "/" + plan[1] + " done", tone: "green" });
+  if (tests)  stats.push({ label: "Tests",  value: tests[1] + " / " + tests[2],        tone: "green" });
+  if (bundle) stats.push({ label: "Bundle", value: bundle[1] + " kB" });
+  if (!stats.length) stats.push({ label: "Status", value: "live", tone: "green" });
+  const title = url ? `Shipped to ${url.replace(/^https?:\/\//, "")}` : "Shipped";
+  const subtitle = text.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim().slice(0, 200);
+  return { icon: "🚀", kind: "shipped", title, subtitle, url, stats };
+}
+
 function parseModule(filePath, content) {
   if (!filePath || typeof content !== "string") return null;
   const lineCount = content.split("\n").length;
@@ -1014,7 +1124,17 @@ const renderers = {
   plan: {
     mount: (c) => {
       const dom = el("div", { class: "component plan" },
-        header("📋", "plan", c.props.title || "Plan", `${(c.props.items || []).filter(i => i.done).length} / ${(c.props.items || []).length}`),
+        header("📋", "plan", c.props.title || "Plan", ""),
+        el("div", { class: "plan-head" },
+          el("div", { class: "plan-ring" },
+            el("div", { html: '<svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="14"/><circle class="fg" cx="18" cy="18" r="14"/></svg>' }),
+            el("div", { class: "pct" }, "0%"),
+          ),
+          el("div", { class: "info" },
+            el("div", { class: "lead" }, "Work plan"),
+            el("div", { class: "sub" }, "0 / 0 complete"),
+          ),
+        ),
         el("div", { class: "c-body" }, el("ul")),
       );
       planFill(dom, c);
@@ -1047,15 +1167,54 @@ const renderers = {
     mount: (c) => {
       const dom = el("div", { class: "component decision" },
         header("?", "decision", "question for you"),
-        el("div", { class: "c-body" },
-          el("div", { style: "margin-bottom: 10px; color: var(--fg);" }, c.props.question || ""),
-          el("div", { class: "opts" }, ...(c.props.options || []).map((o, i) =>
-            el("div", { class: "opt", onclick: () => pickDecision(c.id, dom, i, o) },
-              el("div", { class: "opt-label" }, o.label || `Option ${i + 1}`),
-              el("div", { class: "opt-desc" }, o.desc || ""),
-            )),
+        el("div", { class: "decision-content" }),
+      );
+      renderDecisionBody(dom, c);
+      return dom;
+    },
+    update: (dom, c) => renderDecisionBody(dom, c),
+  },
+  preview: {
+    mount: (c) => {
+      const dom = el("div", { class: "component" },
+        header("✨", "preview", c.props.name || "component", c.props.filename || ""),
+        el("div", { class: "preview-body" }),
+      );
+      const frame = el("div", { class: "preview-frame" + (c.props.layout === "button-only" ? " button-only" : "") });
+      if (c.props.layout !== "button-only") {
+        frame.append(el("div", { class: "pv-toolbar" },
+          el("span", { class: "dot r" }), el("span", { class: "dot y" }), el("span", { class: "dot g" })));
+      }
+      for (const e of (c.props.elements || [])) {
+        if (e.type === "name") frame.append(el("div", { class: "pv-name" }, e.text));
+        else if (e.type === "streak") frame.append(el("div", { class: "pv-streak" },
+          el("span", { class: "flame" }, "🔥"),
+          el("span", null, String(e.value || 12)),
+          el("span", { class: "lab" }, e.label || "day streak")));
+        else if (e.type === "button") frame.append(el("button", { class: "pv-btn" + (e.kind ? " " + e.kind : "") }, e.text || "Click"));
+      }
+      $(".preview-body", dom).append(frame);
+      return dom;
+    },
+  },
+  milestone: {
+    mount: (c) => {
+      const stats = c.props.stats || [];
+      const dom = el("div", { class: "component milestone" },
+        header(c.props.icon || "🎉", "milestone", c.props.kind || "shipped"),
+        el("div", { class: "milestone-body" },
+          el("div", { class: "icon" }, c.props.icon || "🚀"),
+          el("div", { class: "text" },
+            el("div", { class: "h" }, c.props.title || "Shipped"),
+            el("div", { class: "s" }, c.props.subtitle || ""),
+            c.props.url ? el("a", { class: "milestone-link", href: c.props.url, target: "_blank" }, c.props.url.replace(/^https?:\/\//, "")) : null,
           ),
         ),
+        stats.length ? el("div", { class: "milestone-stats" }, ...stats.map(s =>
+          el("div", { class: "ms-stat" },
+            el("span", { class: "v " + (s.tone || "") }, String(s.value)),
+            el("span", { class: "l" }, s.label),
+          ))) : null,
       );
       return dom;
     },
@@ -1152,6 +1311,44 @@ const renderers = {
     },
   },
 };
+function renderDecisionBody(dom, c) {
+  const content = dom.querySelector(".decision-content");
+  content.innerHTML = "";
+  const opts = c.props.options || [];
+  const picked = c.props.picked;
+  if (picked != null) {
+    dom.classList.add("resolved");
+    const chosen = opts[picked] || {};
+    content.append(
+      el("div", { class: "verdict" },
+        el("div", { class: "vcheck" }, "✓"),
+        el("div", null,
+          el("div", { class: "vlabel" }, chosen.label || `Option ${picked + 1}`),
+          chosen.desc ? el("div", { class: "vdesc" }, chosen.desc) : null,
+        ),
+      ),
+      opts.length > 1 ? el("div", { class: "other-opts" },
+        el("div", { class: "others-label" }, "Not chosen"),
+        ...opts.map((o, i) => i === picked ? null : el("div", { class: "ghost" }, o.label || `Option ${i + 1}`)),
+      ) : null,
+    );
+    const meta = dom.querySelector(".meta"); if (meta) meta.textContent = "resolved";
+    return;
+  }
+  content.append(
+    el("div", { class: "c-body" },
+      el("div", { style: "margin-bottom: 10px; color: var(--fg);" }, c.props.question || ""),
+      el("div", { class: "opts" },
+        ...opts.map((o, i) =>
+          el("div", { class: "opt", onclick: () => pickDecision(c.id, i, o) },
+            el("div", { class: "opt-label" }, o.label || `Option ${i + 1}`),
+            el("div", { class: "opt-desc" }, o.desc || ""),
+          )),
+      ),
+    ),
+  );
+}
+
 function kindGlyph(k) {
   switch (k) {
     case "function":  return "ƒ";
@@ -1284,13 +1481,23 @@ function renderStatsGrid(dom, c) {
 }
 
 function planFill(dom, c) {
+  const items = c.props.items || [];
+  const done = items.filter(i => i.done).length;
+  const total = items.length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const circ = 2 * Math.PI * 14;
+  const fg = dom.querySelector(".plan-ring .fg");
+  if (fg) { fg.setAttribute("stroke-dasharray", String(circ)); fg.setAttribute("stroke-dashoffset", String(circ - (pct / 100) * circ)); }
+  const pctEl = dom.querySelector(".plan-ring .pct"); if (pctEl) pctEl.textContent = pct + "%";
+  const sub = dom.querySelector(".plan-head .sub");
+  if (sub) sub.textContent = `${done} / ${total} complete${items.some(i => i.active) ? " · 1 in progress" : ""}`;
   const ul = $("ul", dom); ul.innerHTML = "";
-  (c.props.items || []).forEach(it => {
+  for (const it of items) {
     ul.append(el("li", { class: (it.done ? "done " : "") + (it.active ? "active" : "") },
       el("span", { class: "check" }), el("span", null, it.label)));
-  });
+  }
   const meta = $(".meta", dom);
-  if (meta) meta.textContent = `${(c.props.items || []).filter(i => i.done).length} / ${(c.props.items || []).length}`;
+  if (meta) meta.textContent = `${done} / ${total}`;
 }
 function diffFill(dom, c) {
   const wrap = $(".diff", dom); wrap.innerHTML = "";
@@ -1366,13 +1573,14 @@ $("#activity-expand").addEventListener("click", () => {
 });
 
 /* decision pick (bidirectional — synthesizes a user prompt locally) */
-function pickDecision(id, dom, i, opt) {
-  $$(".opt", dom).forEach((o, idx) => o.classList.toggle("picked", idx === i));
-  const meta = $(".meta", dom); if (meta) meta.textContent = "resolved";
+function pickDecision(id, i, opt) {
+  const b = components.get(id);
+  if (b) {
+    b.props = { ...b.props, picked: i };
+    renderDecisionBody(b.dom, b);
+  }
   const action = { id, kind: "pick", payload: { option: i + 1, label: opt.label, desc: opt.desc } };
   const msg = synthesizeUserMessage(action, components);
-  // Emit a new prompt component to visualize the round-trip — exactly
-  // what the replay-mode wrapper does.
   setTimeout(() => {
     apply({ op: "append", component: { id: newId("user"), type: "prompt", props: { text: msg } }, ts: Date.now() });
     setTimeout(() => apply({

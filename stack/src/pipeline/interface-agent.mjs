@@ -46,13 +46,31 @@ export function editorialAgentRules(chunk, state) {
       }
     }
 
-    // Rule 2a: Write of a source file → `module` card (file icon, path,
-    // parsed exports as pills, source collapsed). The Write created a
-    // file; the user cares about its shape, not its raw text.
+    // Rule 2a: Write of a source file → emit BOTH a `preview` (when we
+    // can parse a stylized rendering from the JSX) AND a `module` card
+    // (the file shape). Preview is the vivid surface, module is the
+    // technical detail just below it.
     if (ev.kind === "assistant" && ev.tool === "Write") {
       const i = ev.input || {};
       const parsed = parseModule(i.file_path, i.content);
       if (parsed) {
+        const preview = parseReactPreview(i.file_path, i.content);
+        if (preview) {
+          out.push({
+            op: "append",
+            component: {
+              id: newId("pv"),
+              type: "preview",
+              props: {
+                filename: i.file_path,
+                name: preview.name,
+                layout: preview.layout,
+                elements: preview.elements,
+              },
+            },
+            ts: ev.ts,
+          });
+        }
         out.push({
           op: "append",
           component: {
@@ -162,7 +180,22 @@ export function editorialAgentRules(chunk, state) {
       }
     }
 
-    // Rule 6: short summary-feeling notes — kept lightly.
+    // Rule 6: a final-shipment text (with words like "shipped to", URL,
+    // and quantitative claims) → `milestone` celebration card.
+    if (ev.kind === "assistant" && ev.text && looksLikeShipMilestone(ev.text)) {
+      out.push({
+        op: "append",
+        component: {
+          id: newId("ms"),
+          type: "milestone",
+          props: shipMilestoneProps(ev.text, state),
+        },
+        ts: ev.ts,
+      });
+      continue;
+    }
+
+    // Rule 7: short summary-feeling notes — kept lightly.
     if (ev.kind === "assistant" && ev.text && shouldKeepNote(ev.text)) {
       out.push({ op: "append", component: { id: newId("note"), type: "note", props: { text: ev.text } }, ts: ev.ts });
     }
@@ -242,6 +275,46 @@ function parseBuildOutput(text) {
   const timeMatch = text.match(/built in ([\d.]+\s*m?s)/i);
   if (timeMatch) stats.push({ label: "Build time", value: timeMatch[1], tone: "green" });
   return stats;
+}
+
+/**
+ * Detect a stylized preview from a React component file. Returns a
+ * { name, layout, elements } shape the page can paint.
+ *
+ * Strategy: look at the JSX `return (...)` and convert known patterns
+ * into a small element list. The page CSS picks colors and shapes; the
+ * preview is a *schematic* of what the component will render — close
+ * enough to feel real, intentionally not a perfect runtime mock.
+ */
+function parseReactPreview(filePath, content) {
+  if (!/\.(tsx|jsx)$/.test(filePath || "")) return null;
+  if (!/return\s*\(?\s*</.test(content)) return null;
+  const nameMatch = content.match(/export\s+(?:default\s+)?function\s+(\w+)/);
+  if (!nameMatch) return null;
+  const name = nameMatch[1];
+  const elements = [];
+
+  // className="name" → component name field. We substitute a fake value
+  // for the demo; in real use the interface agent (LLM) would inspect
+  // a sample state or prop usage.
+  if (/className=["']name["']/.test(content)) {
+    elements.push({ type: "name", text: "Drink water" });
+  }
+  // Streak counter
+  if (/className=[`"'][^"`']*streak/.test(content) || /streak\.current/.test(content)) {
+    elements.push({ type: "streak", value: 12, label: "day streak" });
+  }
+  // Buttons — capture only literal text between `>` and `</button>`,
+  // refusing anything that looks like a JSX expression.
+  for (const m of content.matchAll(/>\s*([^\s<{][^<{}]*?)\s*<\/button>/g)) {
+    const t = m[1].trim();
+    if (!t || t.length > 40) continue;
+    const kind = /freeze|❄/i.test(t) ? "freeze" : null;
+    elements.push({ type: "button", text: t, kind });
+  }
+  if (elements.length === 0) return null;
+  const layout = (elements.length === 1 && elements[0].type === "button") ? "button-only" : "card";
+  return { name, layout, elements };
 }
 
 /**
@@ -387,6 +460,33 @@ function sniffDecision(text) {
       return { label: raw[0].trim().slice(0, 80), desc: (raw.slice(1).join(" — ") || raw[0]).slice(0, 200) };
     }),
   };
+}
+
+function looksLikeShipMilestone(text) {
+  if (!text || text.length > 400) return false;
+  return /\b(shipped|deployed|live at|production)\b/i.test(text);
+}
+function shipMilestoneProps(text, state) {
+  // Try a full URL first; fall back to a bare host like "habits.app"
+  // mentioned after "Shipped to" / "live at".
+  let url = (text.match(/https?:\/\/\S+/) || [])[0];
+  if (!url) {
+    const host = text.match(/(?:shipped to|live at|production:?)\s+([\w-]+(?:\.[\w-]+)+)/i);
+    if (host) url = "https://" + host[1];
+  }
+  // Pull rough numbers from the text
+  const tests = text.match(/(\d+)\s*\/\s*(\d+)\s*tests?\s*green/i);
+  const bundle = text.match(/(\d+(?:\.\d+)?)\s*kB/i);
+  const plan = text.match(/(\d+)\s+plan items?/i);
+  const stats = [];
+  if (plan)   stats.push({ label: "Plan",      value: plan[1] + "/" + plan[1] + " done", tone: "green" });
+  if (tests)  stats.push({ label: "Tests",     value: tests[1] + " / " + tests[2],        tone: "green" });
+  if (bundle) stats.push({ label: "Bundle",    value: bundle[1] + " kB" });
+  if (!stats.length) stats.push({ label: "Status", value: "live", tone: "green" });
+
+  const title = url ? `Shipped to ${url.replace(/^https?:\/\//, "")}` : "Shipped";
+  const subtitle = text.replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim().slice(0, 200);
+  return { icon: "🚀", kind: "shipped", title, subtitle, url, stats };
 }
 
 function shouldKeepNote(text) {

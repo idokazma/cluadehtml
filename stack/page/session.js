@@ -41,7 +41,17 @@ const renderers = {
   plan: {
     mount: (c) => {
       const node = el("div", { class: "component plan" },
-        header("📋", "plan", c.props.title || "Plan", (c.props.items || []).length + " steps"),
+        header("📋", "plan", c.props.title || "Plan", ""),
+        el("div", { class: "plan-head" },
+          el("div", { class: "plan-ring" },
+            el("div", { html: '<svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="14"/><circle class="fg" cx="18" cy="18" r="14"/></svg>' }),
+            el("div", { class: "pct" }, "0%"),
+          ),
+          el("div", { class: "info" },
+            el("div", { class: "lead" }, "Work plan"),
+            el("div", { class: "sub" }, "0 / 0 complete"),
+          ),
+        ),
         el("div", { class: "c-body" }, el("ul")),
       );
       renderPlanItems(node, c);
@@ -82,22 +92,49 @@ const renderers = {
     mount: (c) => {
       const dom = el("div", { class: "component decision" },
         header("?", "decision", "question for you"),
-        el("div", { class: "c-body" },
-          el("div", { style: "margin-bottom: 10px; color: var(--fg);" }, c.props.question || ""),
-          el("div", { class: "opts" },
-            ...(c.props.options || []).map((o, i) =>
-              el("div", {
-                class: "opt",
-                onclick: () => pickDecision(c.id, dom, i, o),
-              },
-                el("div", { class: "opt-label" }, o.label || `Option ${i+1}`),
-                el("div", { class: "opt-desc" }, o.desc || ""),
-              )
-            ),
+        el("div", { class: "decision-content" }),
+      );
+      renderDecisionBody(dom, c);
+      return dom;
+    },
+    update: (dom, c) => renderDecisionBody(dom, c),
+  },
+
+  /* preview — stylized live rendering of a React component */
+  preview: {
+    mount: (c) => {
+      const dom = el("div", { class: "component" },
+        header("✨", "preview", c.props.name || "component", c.props.filename ? path => path : ""),
+        el("div", { class: "preview-body" }),
+      );
+      const m = $(".meta", dom);
+      if (m) m.textContent = c.props.filename || "";
+      renderPreview(dom, c);
+      return dom;
+    },
+  },
+
+  /* milestone — a celebration card for "shipped" / major beats */
+  milestone: {
+    mount: (c) => {
+      const stats = c.props.stats || [];
+      const dom = el("div", { class: "component milestone" },
+        header(c.props.icon || "🎉", "milestone", c.props.kind || "shipped"),
+        el("div", { class: "milestone-body" },
+          el("div", { class: "icon" }, c.props.icon || "🚀"),
+          el("div", { class: "text" },
+            el("div", { class: "h" }, c.props.title || "Shipped"),
+            el("div", { class: "s" }, c.props.subtitle || ""),
+            c.props.url ? el("a", { class: "milestone-link", href: c.props.url, target: "_blank" }, c.props.url) : null,
           ),
         ),
+        stats.length ? el("div", { class: "milestone-stats" },
+          ...stats.map(s => el("div", { class: "ms-stat" },
+            el("span", { class: "v " + (s.tone || "") }, String(s.value)),
+            el("span", { class: "l" }, s.label),
+          ))
+        ) : null,
       );
-      if (c.props.picked != null) markPicked(dom, c.props.picked);
       return dom;
     },
   },
@@ -217,17 +254,35 @@ function header(icon, kind, name, meta) {
 }
 
 function renderPlanItems(dom, c) {
-  const ul = $("ul", dom);
+  const items = c.props.items || [];
+  const done = items.filter(i => i.done).length;
+  const total = items.length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  // ring
+  const circ = 2 * Math.PI * 14;
+  const fg = dom.querySelector(".plan-ring .fg");
+  if (fg) {
+    fg.setAttribute("stroke-dasharray", String(circ));
+    fg.setAttribute("stroke-dashoffset", String(circ - (pct / 100) * circ));
+  }
+  const pctEl = dom.querySelector(".plan-ring .pct");
+  if (pctEl) pctEl.textContent = pct + "%";
+  const sub = dom.querySelector(".plan-head .sub");
+  if (sub) sub.textContent = `${done} / ${total} complete${items.some(i => i.active) ? " · 1 in progress" : ""}`;
+
+  // list
+  const ul = dom.querySelector("ul");
   ul.innerHTML = "";
-  (c.props.items || []).forEach((it, i) => {
+  items.forEach((it, i) => {
     ul.append(el("li", { class: (it.done ? "done " : "") + (it.active ? "active" : "") + " plan-item",
       onclick: () => toggleStep(c.id, i, !it.done) },
       el("span", { class: "check" }),
       el("span", null, it.label),
     ));
   });
-  const meta = $(".meta", dom);
-  if (meta) meta.textContent = `${(c.props.items || []).filter(i => i.done).length} / ${(c.props.items || []).length}`;
+  const meta = dom.querySelector(".meta");
+  if (meta) meta.textContent = `${done} / ${total}`;
 }
 
 function renderDiff(dom, c) {
@@ -360,6 +415,72 @@ function renderDeploy(dom, c) {
   }
 }
 
+function renderDecisionBody(dom, c) {
+  const content = dom.querySelector(".decision-content");
+  content.innerHTML = "";
+  const opts = c.props.options || [];
+  const picked = c.props.picked;
+  if (picked != null) {
+    dom.classList.add("resolved");
+    const chosen = opts[picked] || {};
+    content.append(
+      el("div", { class: "verdict" },
+        el("div", { class: "vcheck" }, "✓"),
+        el("div", null,
+          el("div", { class: "vlabel" }, chosen.label || `Option ${picked + 1}`),
+          chosen.desc ? el("div", { class: "vdesc" }, chosen.desc) : null,
+        ),
+      ),
+      opts.length > 1 ? el("div", { class: "other-opts" },
+        el("div", { class: "others-label" }, "Not chosen"),
+        ...opts.map((o, i) => i === picked ? null : el("div", { class: "ghost" }, o.label || `Option ${i + 1}`)),
+      ) : null,
+    );
+    const meta = dom.querySelector(".meta"); if (meta) meta.textContent = "resolved";
+    return;
+  }
+  content.append(
+    el("div", { class: "c-body" },
+      el("div", { style: "margin-bottom: 10px; color: var(--fg);" }, c.props.question || ""),
+      el("div", { class: "opts" },
+        ...opts.map((o, i) =>
+          el("div", { class: "opt", onclick: () => pickDecision(c.id, i, o) },
+            el("div", { class: "opt-label" }, o.label || `Option ${i + 1}`),
+            el("div", { class: "opt-desc" }, o.desc || ""),
+          )),
+      ),
+    ),
+  );
+}
+
+/* preview renderer — interprets a parsed JSX shape into a stylized visual */
+function renderPreview(dom, c) {
+  const body = dom.querySelector(".preview-body");
+  body.innerHTML = "";
+  const p = c.props || {};
+  const frame = el("div", { class: "preview-frame" + (p.layout === "button-only" ? " button-only" : "") });
+
+  if (p.layout !== "button-only") {
+    frame.append(el("div", { class: "pv-toolbar" },
+      el("span", { class: "dot r" }),
+      el("span", { class: "dot y" }),
+      el("span", { class: "dot g" }),
+    ));
+  }
+
+  for (const el2 of (p.elements || [])) {
+    if (el2.type === "name") frame.append(el("div", { class: "pv-name" }, el2.text));
+    else if (el2.type === "streak") frame.append(el("div", { class: "pv-streak" },
+      el("span", { class: "flame" }, "🔥"),
+      el("span", null, String(el2.value || 12)),
+      el("span", { class: "lab" }, el2.label || "day streak")));
+    else if (el2.type === "button") frame.append(el("button", { class: "pv-btn" + (el2.kind ? " " + el2.kind : "") }, el2.text || "Click"));
+    else if (el2.type === "text") frame.append(el("div", { class: "pv-row" }, el2.text));
+    else if (el2.type === "block") frame.append(el("div", { class: "pv-block" }, el2.text));
+  }
+  body.append(frame);
+}
+
 function kindGlyph(kind) {
   switch (kind) {
     case "function":  return "ƒ";
@@ -465,14 +586,13 @@ $("#activity-expand").addEventListener("click", () => {
 });
 
 // ---- decision interaction (bidirectional!) ----
-function pickDecision(id, dom, i, opt) {
-  markPicked(dom, i);
+function pickDecision(id, i, opt) {
+  const b = components.get(id);
+  if (b) {
+    b.props = { ...b.props, picked: i };
+    renderDecisionBody(b.dom, b);
+  }
   postAction({ id, kind: "pick", payload: { option: i + 1, label: opt.label, desc: opt.desc } });
-}
-function markPicked(dom, i) {
-  $$(".opt", dom).forEach((o, idx) => o.classList.toggle("picked", idx === i));
-  const meta = $(".meta", dom);
-  if (meta) meta.textContent = "resolved";
 }
 function toggleStep(id, step, done) {
   postAction({ id, kind: "toggle", payload: { step, done } });
