@@ -1229,7 +1229,25 @@ export function HabitCard({ habitId }: HabitCardProps) {
   $("#live-pill").classList.remove("live");
 }
 
-demo();
+window.addEventListener("error", e => {
+  const banner = document.createElement("div");
+  banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#3a1c1c;color:#ffb4b4;padding:10px 14px;font-family:ui-monospace,Menlo,monospace;font-size:12px;z-index:9999;border-bottom:1px solid #d97070;white-space:pre-wrap;";
+  banner.textContent = "JS error: " + (e.error?.stack || e.message || e);
+  document.body.appendChild(banner);
+});
+window.addEventListener("unhandledrejection", e => {
+  const banner = document.createElement("div");
+  banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#3a1c1c;color:#ffb4b4;padding:10px 14px;font-family:ui-monospace,Menlo,monospace;font-size:12px;z-index:9999;border-bottom:1px solid #d97070;white-space:pre-wrap;";
+  banner.textContent = "Promise rejection: " + (e.reason?.stack || e.reason || e);
+  document.body.appendChild(banner);
+});
+
+demo().catch(err => {
+  const banner = document.createElement("div");
+  banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#3a1c1c;color:#ffb4b4;padding:10px 14px;font-family:ui-monospace,Menlo,monospace;font-size:12px;z-index:9999;border-bottom:1px solid #d97070;white-space:pre-wrap;";
+  banner.textContent = "demo() threw: " + (err.stack || err.message || err);
+  document.body.appendChild(banner);
+});
 </script>
 </body>
 </html>
