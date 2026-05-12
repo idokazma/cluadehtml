@@ -10,15 +10,25 @@ A scrolling log buries that state under its own history. Every meaningful update
 
 We want to invert that. The interface should show what is true right now, and relegate the conversation to one panel of many.
 
-## Not Generative UI Per Answer — One Living Page
+## The Move: From HTML Outputs to an HTML Interface
 
-There is a popular nearby idea worth distinguishing from: **generative UI**, where each agent response renders its own bespoke HTML artifact. Ask a question, get a card. Ask another, get a different card. It's a real improvement over plain text — the answer can be a chart, a form, a table, an interactive widget instead of a paragraph.
+A growing thread inside the Claude Code team and community ([Thariq Shihipar's "Unreasonable Effectiveness of HTML"](https://x.com/trq212/status/2052809885763747935) is the clearest write-up) has been replacing **markdown outputs** with **HTML outputs**. Specs, implementation plans, PR reviews, research reports, design explorations, throwaway editors with "copy as JSON" buttons — all rendered as standalone HTML files instead of `.md` documents. The argument is right and overdue:
 
-But the artifact pattern keeps the same broken frame the CLI has: **the conversation is still the spine, and each rendering is a disposable leaf hanging off it.** Every answer is its own little universe. Nothing accumulates. The chart from three turns ago is frozen — it can't update when new data lands. The form you filled out is decorative, not load-bearing. State lives in the chat thread, not in the UI; the UI is just a prettier way to *display* the latest reply.
+- HTML carries denser information (tables, SVG, CSS, inline JS, real interactivity) than markdown can.
+- Long HTML is *readable*; long markdown is not.
+- HTML is shareable — one link, opens in any browser, no special viewer.
+- HTML can be two-way — sliders, drag-and-drop, "copy as prompt" buttons that close the loop back into the agent.
+- And it's just more fun, which means the human actually engages with the output.
 
-We want the inverse. **One page, alive for the whole session, mutated in place by the agent as it works.** Not a stream of HTML answers — a single HTML document that is the session. New work doesn't render a new card; it updates the existing ones, or appends a block to the same continuous, interactive log. Old blocks stay live: you can scroll back to a diff from twenty minutes ago, click into it, ask a question about it, re-run the command that produced it. The history is not a transcript of dead snapshots — it is a backlog of still-working components.
+We agree with all of this. **And we want to take the next step.**
 
-This is the move from **"the agent draws a picture for each answer"** to **"the agent and the user are co-editing one document that represents the work."** The page is the spine; the conversation is one panel inside it.
+The artifact approach keeps the CLI as the spine and bolts HTML onto the leaves. You still type into a terminal; the agent still streams text replies; *every now and then* it writes out an HTML file as a deliverable, and you open it in a browser. Each artifact is excellent in isolation — but each one is also its own little universe. The plan from this morning, the design exploration from this afternoon, the PR review from an hour ago, and the throwaway editor you used to triage tickets are four separate files in four separate tabs. Nothing connects them. Nothing in any of them updates when the underlying work moves. The agent's *interface*, the place you actually live while working, is still a scrolling text log — only the deliverables got the upgrade.
+
+We want to apply the same insight one level up: **if HTML is the right medium for the agent's outputs, it is also the right medium for the agent's interface.** Don't render N artifacts per session. Render one living document that *is* the session — the same document the whole way through, with every plan, diff, terminal tail, test panel, design exploration, and custom editor appearing as a block inside it. Not a stream of HTML answers. One HTML page, alive for the whole session, mutated in place by the agent as it works.
+
+Old blocks stay live. The diff from twenty minutes ago is still a diff you can click into. The plan from the start of the session still updates as items are completed. The throwaway editor you spun up to triage tickets is still sitting where you left it, and its "copy as prompt" button still works. The history is not a transcript of dead snapshots — it is a backlog of still-working components, all sharing one page, all reachable, all interactive.
+
+This is the move from **"the agent produces an HTML artifact for each answer"** to **"the agent and the user are co-editing one HTML document that represents the work."** The page is the spine; the conversation is one panel inside it; every artifact the agent would have written as a separate file is instead a block within the same living page — or, when it really should be a separate deliverable, a block that *links to* one. Either way, the interface itself is the document.
 
 ## The Model: A Live Page, Not a Log
 
@@ -64,7 +74,7 @@ The agent does not render a fresh artifact for each turn. There is exactly one d
 
 ## What This Is Not
 
-It is not a chat app with a sidebar. It is not a web wrapper around the existing terminal renderer. It is not a dashboard that polls the CLI for status. It is not generative UI in the artifact sense — the agent does not produce one HTML page per answer and discard the previous one. The CLI is not the source of truth with a prettier face — the page is the source of truth, and the agent's tools write to it directly. There is one page, it is alive, it remembers, and you can reach back into any part of it.
+It is not a chat app with a sidebar. It is not a web wrapper around the existing terminal renderer. It is not a dashboard that polls the CLI for status. And it is not the artifact pattern — the agent does not produce a fresh HTML page for each output and leave you to juggle a folder of disconnected files. The CLI is not the source of truth with a prettier face — the page is the source of truth, and the agent's tools write to it directly. There is one page per session, it is alive, it remembers, and you can reach back into any block in it.
 
 ## Two Scopes: The Project Page and The Session Page
 
