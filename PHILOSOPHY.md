@@ -10,6 +10,16 @@ A scrolling log buries that state under its own history. Every meaningful update
 
 We want to invert that. The interface should show what is true right now, and relegate the conversation to one panel of many.
 
+## Not Generative UI Per Answer — One Living Page
+
+There is a popular nearby idea worth distinguishing from: **generative UI**, where each agent response renders its own bespoke HTML artifact. Ask a question, get a card. Ask another, get a different card. It's a real improvement over plain text — the answer can be a chart, a form, a table, an interactive widget instead of a paragraph.
+
+But the artifact pattern keeps the same broken frame the CLI has: **the conversation is still the spine, and each rendering is a disposable leaf hanging off it.** Every answer is its own little universe. Nothing accumulates. The chart from three turns ago is frozen — it can't update when new data lands. The form you filled out is decorative, not load-bearing. State lives in the chat thread, not in the UI; the UI is just a prettier way to *display* the latest reply.
+
+We want the inverse. **One page, alive for the whole session, mutated in place by the agent as it works.** Not a stream of HTML answers — a single HTML document that is the session. New work doesn't render a new card; it updates the existing ones, or appends a block to the same continuous, interactive log. Old blocks stay live: you can scroll back to a diff from twenty minutes ago, click into it, ask a question about it, re-run the command that produced it. The history is not a transcript of dead snapshots — it is a backlog of still-working components.
+
+This is the move from **"the agent draws a picture for each answer"** to **"the agent and the user are co-editing one document that represents the work."** The page is the spine; the conversation is one panel inside it.
+
 ## The Model: A Live Page, Not a Log
 
 Replace the CLI with a single HTML page that the agent **renders into and updates in place** as it works. Think of it less like a chat client and more like a dashboard the agent is co-authoring with you in real time — closer to a Jupyter notebook that rewrites its own cells, or an IDE whose entire UI is owned by the model.
@@ -41,6 +51,9 @@ Background processes — a test run, a build, a streaming search, a subagent —
 **7. The page is the protocol.**
 The HTML is not a presentation layer over a "real" CLI session — it *is* the session. There is no hidden truth behind it. Anything the agent knows, it has put on the page (or in a collapsible drawer of the page). This makes sessions resumable, shareable, and reviewable: send someone the page and they have everything.
 
+**8. One page per session, not one page per answer.**
+The agent does not render a fresh artifact for each turn. There is exactly one document, and every turn either appends a block to it or mutates a block already in it. This is what makes the log a *log* and not a slideshow: scrolling back is scrolling through live components, not snapshots of dead ones. A diff from an hour ago is still a diff you can act on; a question from ten minutes ago is still a question you can answer; a test panel from earlier in the run still updates if its tests get re-run.
+
 ## What This Buys Us
 
 - **Glanceability.** The state of the work is one look away, not a scroll-and-grep away.
@@ -51,7 +64,7 @@ The HTML is not a presentation layer over a "real" CLI session — it *is* the s
 
 ## What This Is Not
 
-It is not a chat app with a sidebar. It is not a web wrapper around the existing terminal renderer. It is not a dashboard that polls the CLI for status. The CLI is not the source of truth with a prettier face — the page is the source of truth, and the agent's tools write to it directly.
+It is not a chat app with a sidebar. It is not a web wrapper around the existing terminal renderer. It is not a dashboard that polls the CLI for status. It is not generative UI in the artifact sense — the agent does not produce one HTML page per answer and discard the previous one. The CLI is not the source of truth with a prettier face — the page is the source of truth, and the agent's tools write to it directly. There is one page, it is alive, it remembers, and you can reach back into any part of it.
 
 ## Two Scopes: The Project Page and The Session Page
 
