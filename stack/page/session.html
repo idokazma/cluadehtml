@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>stack — live session</title>
+<link rel="stylesheet" href="/static/session.css" />
+</head>
+<body>
+
+<header>
+  <div class="logo">C</div>
+  <div>
+    <div class="title">stack <span class="sub">— live</span></div>
+  </div>
+  <div class="spacer"></div>
+  <span class="pill" id="connection">connecting…</span>
+  <span class="pill" id="model">claude</span>
+</header>
+
+<main id="main">
+  <div class="stream" id="stream"></div>
+</main>
+
+<!-- activity indicator (single instance, sticky-ish above the input bar) -->
+<div class="activity" id="activity" hidden>
+  <div class="dot"></div>
+  <div class="name" id="activity-name">Idle</div>
+  <div class="metric" id="activity-metric"></div>
+  <button class="expand" id="activity-expand" title="Expand underlying tool calls">▾</button>
+</div>
+<div class="activity-drawer" id="activity-drawer" hidden></div>
+
+<div class="input-bar">
+  <div class="input-wrap">
+    <textarea id="composer" placeholder="Type a follow-up, or click a component to act on it…" rows="1"></textarea>
+    <button class="send-btn" id="send">Send</button>
+  </div>
+</div>
+
+<div class="ctx-menu" id="ctx-menu" hidden></div>
+
+<script type="module" src="/static/session.js"></script>
+</body>
+</html>

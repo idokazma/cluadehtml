@@ -26,6 +26,24 @@ stacked into a single page that grows as the session goes.
   the model emitting `tool_use(Read)` all the way to a component in the
   browser.
 
+- **[`stack/`](./stack/)** — **the implementation**. Node + ESM, no
+  dependencies, runnable today:
+
+  ```sh
+  cd stack
+  node bin/stack.mjs run --replay fixtures/habits-day1.jsonl
+  # open http://localhost:3737/
+  ```
+
+  Wires the full pipeline end-to-end: ingest (claude subprocess or
+  replay) → normalize → prefilter (activity indicator + auto-commits)
+  → editorial pass → SSE → browser page. Bidirectional inputs
+  (`POST /api/action`) round-trip. The editorial agent's system
+  prompt is in [`stack/prompts/interface-agent.md`](./stack/prompts/interface-agent.md);
+  the rules implementation is a faithful translation of that prompt
+  so the system runs without an API key, with a clearly-marked seam
+  for swapping in a real Haiku call.
+
 - **[`demo.html`](./demo.html)** — interactive mockup of the idea. Open it
   in a browser. A simulated agent run plays out as a stack of components:
   a clickable plan, a file diff, a streaming terminal, a live test panel,
