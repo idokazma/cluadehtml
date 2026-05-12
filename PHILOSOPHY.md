@@ -53,6 +53,36 @@ The HTML is not a presentation layer over a "real" CLI session — it *is* the s
 
 It is not a chat app with a sidebar. It is not a web wrapper around the existing terminal renderer. It is not a dashboard that polls the CLI for status. The CLI is not the source of truth with a prettier face — the page is the source of truth, and the agent's tools write to it directly.
 
+## Two Scopes: The Project Page and The Session Page
+
+The HTML interface wraps **two** things, not one.
+
+### 1. The session page
+
+A live, mutating view of one agent run — the plan, diffs, tests, questions, terminal tails, and chat thread for the current task. This is what we've described above.
+
+### 2. The project page
+
+The first thing you see when you open Claude Code in a repo, **before** you've asked it to do anything. Today, opening the CLI in a new project gives you a blinking cursor and zero context — the human has to do all the work of figuring out what this codebase is, where they left off, what's broken, what's in flight. That is exactly backwards. The agent has already read the repo; it should hand you a briefing.
+
+The project page is that briefing, generated and kept fresh by the agent:
+
+- **What is this?** A one-paragraph description of the codebase, inferred from the code itself, not from a stale README. Stack, entry points, how to run it.
+- **Where you left off.** The last few sessions, summarized as cards: "yesterday: added idempotency keys to /charge — 1 test still failing." Click to resume.
+- **What's in flight.** Open branches, uncommitted changes, draft PRs, in-progress migrations. The agent surfaces these without being asked.
+- **What's broken.** Failing CI, type errors on the current branch, dependencies with known CVEs, TODOs the agent thinks are stale. Each is a block you can click to start a session aimed at fixing it.
+- **A map of the codebase.** Not a file tree — a *concept* tree. "Auth lives here. Payments lives here. The thing you'll probably want to touch for your task lives here."
+- **Suggested next moves.** "You haven't run the test suite in 3 days." "There's a dependency upgrade waiting." "PR #482 has review comments." Each is a one-click session-starter.
+- **A conversation panel,** same as in a session — but the default mode is "browse and click," not "type and wait."
+
+The point is that **onboarding to a project should take seconds, not an afternoon**. A new contributor — or you, returning to a repo you haven't touched in a month — opens the page and is oriented immediately. The agent has done the reading for you.
+
+### How the two scopes relate
+
+The project page is a *meta-session* whose blocks are summaries of, and entry points into, real sessions. Starting a task from a project-page card spawns a session page; the session, when finished, writes its own summary block back into the project page. The project page is the index; sessions are the chapters. Both are live HTML, both follow the same principles, both are the source of truth for their scope.
+
+This means a project gets a persistent, evolving "home" — not a folder of forgotten transcripts, but a living dashboard that knows what the repo is, what was done to it, what's wrong with it, and what to do next.
+
 ## The North Star
 
-A user opens the page, watches the agent work for thirty seconds without typing, and *understands the state of their project better than they did before they opened it*. The interface is doing its job when the conversation has become optional.
+A user opens the page on a project they've never seen and, **without typing a single character**, understands what it is, what state it's in, and what they could do next. They open a session and, within thirty seconds of watching, understand the state of the work better than they did before. The interface is doing its job when the conversation has become optional — at both scopes.
