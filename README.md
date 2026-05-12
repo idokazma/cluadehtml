@@ -13,6 +13,12 @@ stacked into a single page that grows as the session goes.
   stackable, interactive components, and let the stack of them *be* the
   session.
 
+- **[`BUILD_PLAN.md`](./BUILD_PLAN.md)** — how to actually build it.
+  Researched against Claude Code's real observation points (hooks, Agent
+  SDK, `claude -p --output-format stream-json`, session JSONL on disk, MCP,
+  Channels). Covers the wrapper, the mapping from tool calls to components,
+  the local server, persistence, and a phased roll-out.
+
 - **[`demo.html`](./demo.html)** — interactive mockup of the idea. Open it
   in a browser. A simulated agent run plays out as a stack of components:
   a clickable plan, a file diff, a streaming terminal, a live test panel,
