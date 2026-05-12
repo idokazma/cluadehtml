@@ -68,21 +68,21 @@ test("plain prose without options does NOT become a decision", () => {
   assert.equal(out.filter(m => m.component?.type === "decision").length, 0);
 });
 
-test("long-running Bash auto-commits a streaming terminal", () => {
+test("long-running Bash that isn't a test/build/deploy auto-commits a streaming terminal", () => {
   const state = {};
   const ev = {
     kind: "assistant", tool: "Bash", tool_use_id: "tu_b",
-    input: { command: "npm test --silent" },
+    input: { command: "docker compose up" },
     ts: 1,
   };
   const out = editorialAgentRules([ev], state);
   const t = out.find(m => m.component?.type === "terminal");
-  assert.ok(t, "should commit a terminal");
-  assert.equal(t.component.props.command, "npm test --silent");
+  assert.ok(t, "should commit a terminal for docker compose up");
+  assert.equal(t.component.props.command, "docker compose up");
   assert.equal(t.component.props.status, "running");
 });
 
-test("non-test Bash does NOT auto-commit a terminal", () => {
+test("non-long-running Bash (ls, cat) does NOT auto-commit a terminal", () => {
   const ev = {
     kind: "assistant", tool: "Bash", tool_use_id: "tu_b",
     input: { command: "ls -la" }, ts: 1,
@@ -95,13 +95,105 @@ test("tool_result of a committed terminal streams + finalizes", () => {
   const state = {};
   editorialAgentRules([{
     kind: "assistant", tool: "Bash", tool_use_id: "tu_b",
-    input: { command: "vitest run" }, ts: 1,
+    input: { command: "docker compose up" }, ts: 1,
   }], state);
   const out = editorialAgentRules([{
-    kind: "tool_result", tool_use_id: "tu_b", content: "7 passed\n", ts: 2,
+    kind: "tool_result", tool_use_id: "tu_b", content: "Started 3 services\n", ts: 2,
   }], state);
   const ops = out.map(m => m.op);
   assert.deepEqual(ops, ["stream", "finalize"]);
+});
+
+test("npm test → `tests` panel (not terminal), result parses pass/fail counts", () => {
+  const state = {};
+  const out1 = editorialAgentRules([{
+    kind: "assistant", tool: "Bash", tool_use_id: "tu_t",
+    input: { command: "npm test --silent" }, ts: 1,
+  }], state);
+  const t = out1.find(m => m.component?.type === "tests");
+  assert.ok(t, "should commit a tests panel");
+  assert.equal(t.component.props.status, "running");
+  assert.equal(out1.filter(m => m.component?.type === "terminal").length, 0, "should NOT also commit a terminal");
+
+  const out2 = editorialAgentRules([{
+    kind: "tool_result", tool_use_id: "tu_t",
+    content: "Test Files  2 passed (2)\nTests       7 passed (7)\nDuration    412ms",
+    ts: 2,
+  }], state);
+  const patch = out2.find(m => m.op === "patch");
+  assert.ok(patch, "tool_result should emit a patch on the tests component");
+  assert.equal(patch.props.passed, 7);
+  assert.equal(patch.props.failed, 0);
+  assert.equal(patch.props.duration, "412ms");
+});
+
+test("vercel deploy → `deploy` step list (not terminal), result captures live URL", () => {
+  const state = {};
+  const out1 = editorialAgentRules([{
+    kind: "assistant", tool: "Bash", tool_use_id: "tu_d",
+    input: { command: "npx vercel deploy --prod" }, ts: 1,
+  }], state);
+  const d = out1.find(m => m.component?.type === "deploy");
+  assert.ok(d, "should commit a deploy component");
+  assert.ok(d.component.props.steps.length >= 2, "should have at least 2 steps");
+
+  const out2 = editorialAgentRules([{
+    kind: "tool_result", tool_use_id: "tu_d",
+    content: "Vercel CLI 33.0.0\n  Production: https://habits.app [2s]",
+    ts: 2,
+  }], state);
+  const patch = out2.find(m => m.op === "patch");
+  assert.ok(patch);
+  assert.equal(patch.props.status, "done");
+  assert.match(patch.props.url, /https:\/\/habits\.app/);
+});
+
+test("npm run build → `stats` cards (not terminal), result parses bundle/modules/time", () => {
+  const state = {};
+  editorialAgentRules([{
+    kind: "assistant", tool: "Bash", tool_use_id: "tu_b",
+    input: { command: "npm run build" }, ts: 1,
+  }], state);
+  const out = editorialAgentRules([{
+    kind: "tool_result", tool_use_id: "tu_b",
+    content: "vite build\n  ✓ 142 modules transformed.\n  dist/assets/index.js  82.14 kB\n  ✓ built in 1.31s",
+    ts: 2,
+  }], state);
+  const patch = out.find(m => m.op === "patch");
+  assert.ok(patch);
+  const labels = patch.props.stats.map(s => s.label);
+  assert.ok(labels.includes("Bundle"));
+  assert.ok(labels.includes("Modules"));
+  assert.ok(labels.includes("Build time"));
+});
+
+test("Write of a *schema.ts file with multiple `interface` blocks → `schema` diagram (not diff)", () => {
+  const ev = {
+    kind: "assistant", tool: "Write", tool_use_id: "tu_w",
+    input: {
+      file_path: "src/db/schema.ts",
+      content: "export interface Habit { id: string; name: string; createdAt: number }\n" +
+               "export interface CheckIn { id: string; habitId: string; date: string }",
+    },
+    ts: 1,
+  };
+  const out = editorialAgentRules([ev], {});
+  const s = out.find(m => m.component?.type === "schema");
+  assert.ok(s, "should commit a schema component");
+  assert.equal(s.component.props.entities.length, 2);
+  assert.equal(s.component.props.entities[0].name, "Habit");
+  assert.equal(out.filter(m => m.component?.type === "diff").length, 0, "should NOT also commit a diff");
+});
+
+test("Write of a *.tsx component file still produces a diff (schema rule only matches schema/db files)", () => {
+  const ev = {
+    kind: "assistant", tool: "Write", tool_use_id: "tu_w",
+    input: { file_path: "src/components/HabitCard.tsx", content: "export function HabitCard() { return null; }" },
+    ts: 1,
+  };
+  const out = editorialAgentRules([ev], {});
+  assert.ok(out.find(m => m.component?.type === "diff"));
+  assert.equal(out.filter(m => m.component?.type === "schema").length, 0);
 });
 
 test("a short summary-feeling note IS kept", () => {

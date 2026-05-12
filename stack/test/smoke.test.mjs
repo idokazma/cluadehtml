@@ -61,8 +61,11 @@ test("replay produces the expected committed components end-to-end", async (t) =
   assert.equal(byType.plan, 1, "exactly one plan component (TodoWrite patched in place)");
   assert.equal(byType.decision, 1, "exactly one decision card (sniffed from the prose)");
   assert.ok(byType.diff >= 1, "at least one diff");
-  assert.equal(byType.terminal, 1, "exactly one terminal (the npm test)");
+  assert.equal(byType.tests, 1, "exactly one tests panel (the npm test, routed by the new rules)");
   assert.ok(byType.note >= 1, "at least one note");
+  // Optional: a schema may appear if the fixture writes schema.ts with multiple interfaces
+  // (the habits-day1.jsonl fixture does, so we assert it).
+  assert.equal(byType.schema, 1, "one schema diagram (from src/db/schema.ts with 2 interfaces)");
 
   // Plan should have been patched: at least 3 items done by the end.
   const plan = Object.values(state).find(c => c.type === "plan");

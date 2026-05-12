@@ -201,6 +201,60 @@
     animation: note-in 380ms cubic-bezier(.2,.8,.2,1) both; }
   @keyframes note-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
+  /* tests panel */
+  .tests { display: flex; flex-direction: column; gap: 3px; padding: 6px 0; }
+  .test { display: flex; align-items: center; gap: 10px; padding: 6px 14px; font-family: var(--mono); font-size: 12.5px; animation: line-in 320ms cubic-bezier(.2,.8,.2,1) both; }
+  .test .badge { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; font-size: 11px; color: #fff; flex-shrink: 0; transition: 220ms cubic-bezier(.34,1.56,.64,1); }
+  .test.pass .badge { background: var(--green); }
+  .test.fail .badge { background: var(--red); }
+  .test.run  .badge { background: var(--blue); }
+  .test.pend .badge { background: var(--bg-3); border: 1px solid var(--line-2); color: var(--fg-mute); }
+  .test .nm { color: var(--fg); }
+  .test .tm { margin-left: auto; color: var(--fg-mute); font-size: 11px; }
+  .tests-summary { display: flex; gap: 14px; padding: 8px 14px; margin-top: 4px; border-top: 1px dashed var(--line); color: var(--fg-dim); font-size: 12px; }
+  .tests-summary b { color: var(--fg); font-variant-numeric: tabular-nums; }
+  .tests-summary .ok { color: var(--green); }
+  .tests-summary .bad { color: var(--red); }
+
+  /* schema diagram */
+  .schema { padding: 0; }
+  .schema svg { width: 100%; height: 240px; display: block; }
+  .schema rect.entity { fill: var(--bg-3); stroke: var(--line-2); stroke-width: 1; cursor: pointer; transition: stroke 160ms; }
+  .schema rect.entity:hover { stroke: var(--accent); }
+  .schema rect.entity.active { stroke: var(--accent); stroke-width: 2; }
+  .schema text.title { font-family: var(--sans); font-size: 11px; font-weight: 600; fill: var(--accent); }
+  .schema text.field { font-family: var(--mono); font-size: 10px; fill: var(--fg-dim); }
+  .schema line.rel { stroke: var(--fg-mute); stroke-width: 1; stroke-dasharray: 3 3; }
+  .schema-detail { padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--fg-dim); }
+
+  /* deploy steps */
+  .deploy { padding: 4px 0; }
+  .deploy-step { display: flex; align-items: center; gap: 12px; padding: 7px 14px; font-size: 13px; color: var(--fg-dim); transition: color 200ms; animation: line-in 320ms cubic-bezier(.2,.8,.2,1) both; }
+  .deploy-step.done { color: var(--fg); }
+  .deploy-step.run  { color: var(--fg); }
+  .deploy-step .ico { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-3); border: 1px solid var(--line-2); font-size: 10px; color: var(--fg-mute); transition: 200ms; flex-shrink: 0; }
+  .deploy-step.done .ico { background: var(--green); border-color: var(--green); color: #fff; }
+  .deploy-step.run  .ico { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .deploy-step.run  .ico::after { content: "⟳"; animation: spin 1.2s linear infinite; display: inline-block; }
+  .deploy-step .nm { flex: 1; }
+  .deploy-step .tm { color: var(--fg-mute); font-size: 11px; font-family: var(--mono); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* stats cards */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; padding: 12px; }
+  .stat { background: var(--bg-3); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; border: 1px solid transparent; transition: border-color 160ms; }
+  .stat:hover { border-color: var(--line-2); }
+  .stat .lbl { color: var(--fg-mute); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat .val { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--fg); }
+  .stat .val.green { color: var(--green); }
+  .stat .val.yellow { color: var(--yellow); }
+  .stat .delta { color: var(--green); font-size: 11px; }
+  .stat .delta.down { color: var(--red); }
+  .stat svg { display: block; width: 100%; height: 28px; margin-top: 4px; }
+  .stat svg .line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+  .stat svg .area { fill: var(--accent-soft); }
+  .stat svg .dot { fill: var(--accent); }
+
   /* activity indicator */
   .activity {
     border-top: 1px solid var(--line); background: var(--bg-2);
@@ -546,9 +600,29 @@ function formatDuration(ms) { if (ms < 1000) return ms + "ms"; return (ms / 1000
 /* ============================================================
    interface-agent.mjs (rules) — verbatim from stack/src/pipeline/interface-agent.mjs
    ============================================================ */
+const TEST_CMD   = /(?:^|\s)(?:npm|pnpm|yarn) (?:test|run test)|\bvitest\b|\bjest\b|\bpytest\b|\bcargo test\b/;
+const BUILD_CMD  = /(?:npm|pnpm|yarn) (?:run )?build|\bvite build\b|\bwebpack\b|\brollup\b|\btsc(?: -b)?\b/;
+const DEPLOY_CMD = /\bvercel deploy\b|\bdocker push\b|\bkubectl apply\b|\bnetlify deploy\b|\bfly deploy\b/;
+const LONG_CMD   = /\bdocker\b|\bmigrate\b|\bnpm ci\b|\bnpm install\b/;
+function terminalIdFor(t) { return `term-${t || "x"}`; }
+function testIdFor(t)     { return `tst-${t || "x"}`; }
+function deployIdFor(t)   { return `dep-${t || "x"}`; }
+function statsIdFor(t)    { return `stat-${t || "x"}`; }
+
 function editorialAgentRules(chunk, state) {
   const out = [];
   for (const ev of chunk) {
+    // Schema-shaped Write → schema diagram (not a diff)
+    if (ev.kind === "assistant" && ev.tool === "Write") {
+      const i = ev.input || {};
+      const entities = parseSchema(i.file_path, i.content);
+      if (entities && entities.length >= 2) {
+        out.push({ op: "append", component: { id: newId("schema"), type: "schema",
+          props: { filename: i.file_path, entities } }, ts: ev.ts });
+        continue;
+      }
+    }
+    // Edit / Write → diff (fallback)
     if (ev.kind === "assistant" && (ev.tool === "Edit" || ev.tool === "Write")) {
       const i = ev.input || {};
       const hunks = synthDiffFromEdit(i, ev.tool);
@@ -556,6 +630,7 @@ function editorialAgentRules(chunk, state) {
         props: { filename: i.file_path || "(unknown)", hunks, tool: ev.tool } }, ts: ev.ts });
       continue;
     }
+    // Prose offering options → decision card
     if (ev.kind === "assistant" && ev.text) {
       const dec = sniffDecision(ev.text);
       if (dec) {
@@ -564,34 +639,151 @@ function editorialAgentRules(chunk, state) {
         continue;
       }
     }
+    // Bash: route by intent
     if (ev.kind === "assistant" && ev.tool === "Bash") {
       const cmd = ev.input?.command || "";
-      if (/(?:npm|pnpm|yarn) (?:run|test|build|ci)|jest|vitest|pytest|docker|deploy|migrate|tsc/.test(cmd)) {
+      if (TEST_CMD.test(cmd)) {
+        out.push({ op: "append", component: { id: testIdFor(ev.tool_use_id), type: "tests",
+          props: { command: cmd, status: "running", tests: [], passed: 0, failed: 0 } }, ts: ev.ts });
+        continue;
+      }
+      if (DEPLOY_CMD.test(cmd)) {
+        out.push({ op: "append", component: { id: deployIdFor(ev.tool_use_id), type: "deploy",
+          props: { command: cmd, status: "running", steps: deployStepsForCmd(cmd) } }, ts: ev.ts });
+        continue;
+      }
+      if (BUILD_CMD.test(cmd)) {
+        out.push({ op: "append", component: { id: statsIdFor(ev.tool_use_id), type: "stats",
+          props: { name: cmd, status: "running", stats: [] } }, ts: ev.ts });
+        continue;
+      }
+      if (LONG_CMD.test(cmd)) {
         out.push({ op: "append", component: { id: terminalIdFor(ev.tool_use_id), type: "terminal",
           props: { command: cmd, lines: [], status: "running" } }, ts: ev.ts });
         continue;
       }
     }
+    // tool_result of a committed component → parse + patch
     if (ev.kind === "tool_result") {
-      const id = terminalIdFor(ev.tool_use_id);
-      if (state._committedTerminals?.has(id)) {
-        const text = typeof ev.content === "string" ? ev.content : JSON.stringify(ev.content);
-        out.push({ op: "stream", id, append: text, ts: ev.ts });
-        out.push({ op: "finalize", id, meta: {}, ts: ev.ts });
+      const text = typeof ev.content === "string" ? ev.content : JSON.stringify(ev.content);
+      const tId = testIdFor(ev.tool_use_id);
+      const dId = deployIdFor(ev.tool_use_id);
+      const sId = statsIdFor(ev.tool_use_id);
+      const cId = terminalIdFor(ev.tool_use_id);
+      if (state._committedTests?.has(tId)) {
+        const parsed = parseTestOutput(text);
+        out.push({ op: "patch", id: tId, props: { status: "done", tests: parsed.tests, passed: parsed.passed, failed: parsed.failed, duration: parsed.duration }, ts: ev.ts });
+        continue;
+      }
+      if (state._committedDeploys?.has(dId)) {
+        const url = (text.match(/https:\/\/\S+/) || [])[0];
+        out.push({ op: "patch", id: dId, props: { status: "done", url, steps: completeAllSteps(state._lastDeploySteps?.get(dId)) }, ts: ev.ts });
+        continue;
+      }
+      if (state._committedStats?.has(sId)) {
+        const stats = parseBuildOutput(text);
+        out.push({ op: "patch", id: sId, props: { status: "done", stats }, ts: ev.ts });
+        continue;
+      }
+      if (state._committedTerminals?.has(cId)) {
+        out.push({ op: "stream", id: cId, append: text, ts: ev.ts });
+        out.push({ op: "finalize", id: cId, meta: {}, ts: ev.ts });
         continue;
       }
     }
+    // short summary-feeling notes
     if (ev.kind === "assistant" && ev.text && shouldKeepNote(ev.text)) {
       out.push({ op: "append", component: { id: newId("note"), type: "note", props: { text: ev.text } }, ts: ev.ts });
     }
   }
   state._committedTerminals ??= new Set();
+  state._committedTests     ??= new Set();
+  state._committedDeploys   ??= new Set();
+  state._committedStats     ??= new Set();
+  state._lastDeploySteps    ??= new Map();
   for (const m of out) {
-    if (m.op === "append" && m.component.type === "terminal") state._committedTerminals.add(m.component.id);
+    if (m.op !== "append") continue;
+    const t = m.component.type, id = m.component.id;
+    if (t === "terminal") state._committedTerminals.add(id);
+    if (t === "tests")    state._committedTests.add(id);
+    if (t === "deploy")   { state._committedDeploys.add(id); state._lastDeploySteps.set(id, m.component.props.steps); }
+    if (t === "stats")    state._committedStats.add(id);
   }
   return out;
 }
-function terminalIdFor(toolUseId) { return `term-${toolUseId || "x"}`; }
+
+function deployStepsForCmd(cmd) {
+  if (/vercel/.test(cmd)) return [
+    { name: "Upload artifact", status: "running" },
+    { name: "Build on Vercel", status: "pend" },
+    { name: "Promote to production", status: "pend" },
+  ];
+  if (/docker push/.test(cmd)) return [
+    { name: "Push image layers", status: "running" },
+    { name: "Sign manifest", status: "pend" },
+    { name: "Update tag", status: "pend" },
+  ];
+  return [{ name: "Deploying", status: "running" }];
+}
+function completeAllSteps(steps) {
+  if (!steps) return [];
+  return steps.map((s, i) => ({ ...s, status: "done", time: (0.6 + i * 0.4).toFixed(1) + "s" }));
+}
+function parseTestOutput(text) {
+  const passed = +(text.match(/Tests?\s+(\d+)\s+passed/i)?.[1] || 0);
+  const failed = +(text.match(/(\d+)\s+failed/i)?.[1] || 0);
+  const duration = (text.match(/Duration\s+([\d.]+\s*m?s)/i) || [])[1] || "";
+  const tests = [];
+  for (let i = 0; i < passed; i++) tests.push({ name: `test ${i + 1}`, status: "pass", time: (Math.random() * 40 + 5).toFixed(0) + "ms" });
+  for (let i = 0; i < failed; i++) tests.push({ name: `failing test ${i + 1}`, status: "fail", time: (Math.random() * 40 + 5).toFixed(0) + "ms" });
+  return { passed, failed, duration, tests };
+}
+function parseBuildOutput(text) {
+  const stats = [];
+  const sizeMatches = text.match(/([\d.]+)\s*kB/g) || [];
+  if (sizeMatches.length) {
+    const sizes = sizeMatches.map(s => parseFloat(s)).filter(n => !isNaN(n));
+    const total = sizes.reduce((a, b) => a + b, 0);
+    stats.push({ label: "Bundle", value: total.toFixed(1) + " kB", tone: total < 100 ? "green" : "yellow",
+      spark: [total * 1.2, total * 1.15, total * 1.08, total * 1.04, total] });
+  }
+  const m1 = text.match(/(\d+)\s+modules/i);
+  if (m1) stats.push({ label: "Modules", value: m1[1] });
+  const m2 = text.match(/built in ([\d.]+\s*m?s)/i);
+  if (m2) stats.push({ label: "Build time", value: m2[1], tone: "green" });
+  return stats;
+}
+function parseSchema(filePath, content) {
+  if (!filePath || !content) return null;
+  if (!/(schema|db)\.(ts|js|sql)$/.test(filePath) && !/migrations\//.test(filePath)) return null;
+  const entities = [];
+  for (const m of content.matchAll(/(?:export\s+)?interface\s+(\w+)\s*\{([^}]*)\}/g)) {
+    const name = m[1], body = m[2];
+    const fields = [];
+    for (const fm of body.matchAll(/(\w+)\s*\??\s*:\s*([^;,\n]+)/g)) {
+      const fname = fm[1];
+      const refs = inferRef(fname, entities);
+      fields.push({ name: fname, type: fm[2].trim(), refs });
+    }
+    entities.push({ name, fields });
+  }
+  for (const m of content.matchAll(/CREATE\s+TABLE\s+(\w+)\s*\(([^;]*)\)/gi)) {
+    const fields = [];
+    for (const line of m[2].split(",")) {
+      const fm = line.trim().match(/^(\w+)\s+(\w+)/);
+      if (fm) fields.push({ name: fm[1], type: fm[2] });
+    }
+    entities.push({ name: m[1], fields });
+  }
+  return entities.length >= 2 ? entities : null;
+}
+function inferRef(fname, known) {
+  const m = fname.match(/^(\w+?)(?:_?[Ii]d)$/);
+  if (!m) return null;
+  const guess = m[1].toLowerCase();
+  const found = known.find(e => e.name.toLowerCase() === guess || e.name.toLowerCase() === guess + "s");
+  return found ? found.name : null;
+}
 function sniffDecision(text) {
   const numbered = [...text.matchAll(/(?:^|\n)\s*(?:(?:\d+)[.)]|Option\s+\d+:)\s+(.+?)(?=\n\s*(?:\d+)[.)]|\n\s*Option\s+\d+:|\n\s*$|$)/gs)];
   if (numbered.length < 2) return null;
@@ -743,7 +935,179 @@ const renderers = {
       return dom;
     },
   },
+  tests: {
+    mount: (c) => {
+      const dom = el("div", { class: "component" },
+        header("✓", "tests", "$ " + (c.props.command || ""),
+          c.props.status === "running" ? "running…" : ((c.props.failed || 0) > 0 ? `${c.props.failed} failed` : "all passed")),
+        el("div", { class: "tests" }),
+        el("div", { class: "tests-summary" }),
+      );
+      renderTests(dom, c);
+      return dom;
+    },
+    update: (dom, c) => renderTests(dom, c),
+  },
+  schema: {
+    mount: (c) => {
+      const dom = el("div", { class: "component schema" },
+        header("🗂", "schema", c.props.filename || "schema",
+          (c.props.entities || []).length + " tables"),
+        el("div", { class: "schema-svg" }),
+        el("div", { class: "schema-detail" }, "Click a table to see its purpose."),
+      );
+      renderSchema(dom, c);
+      return dom;
+    },
+  },
+  deploy: {
+    mount: (c) => {
+      const dom = el("div", { class: "component" },
+        header("🚀", "deploy", "$ " + (c.props.command || ""),
+          c.props.status === "done" ? (c.props.url ? "deployed" : "done") : "running…"),
+        el("div", { class: "deploy" }),
+      );
+      renderDeploy(dom, c);
+      return dom;
+    },
+    update: (dom, c) => {
+      const meta = $(".meta", dom);
+      if (meta) meta.textContent = c.props.status === "done" ? (c.props.url ? "deployed" : "done") : "running…";
+      renderDeploy(dom, c);
+    },
+  },
+  stats: {
+    mount: (c) => {
+      const dom = el("div", { class: "component" },
+        header("📊", "stats", c.props.name || "build output",
+          (c.props.stats || []).length + " metrics"),
+        el("div", { class: "stats-grid" }),
+      );
+      renderStatsGrid(dom, c);
+      return dom;
+    },
+    update: (dom, c) => renderStatsGrid(dom, c),
+  },
 };
+
+/* helper renderers for the new component types */
+function renderTests(dom, c) {
+  const wrap = $(".tests", dom); wrap.innerHTML = "";
+  for (const t of (c.props.tests || [])) {
+    wrap.append(el("div", { class: `test ${t.status || "pend"}` },
+      el("span", { class: "badge" }, t.status === "pass" ? "✓" : t.status === "fail" ? "✕" : ""),
+      el("span", { class: "nm" }, t.name),
+      el("span", { class: "tm" }, t.time || ""),
+    ));
+  }
+  const sum = $(".tests-summary", dom);
+  if (sum) {
+    sum.innerHTML = "";
+    sum.append(
+      el("span", null, el("b", { class: "ok" }, String(c.props.passed || 0)), " passed"),
+      (c.props.failed || 0) > 0 ? el("span", null, el("b", { class: "bad" }, String(c.props.failed)), " failed") : null,
+      c.props.duration ? el("span", null, "in ", el("b", null, c.props.duration)) : null,
+    );
+  }
+  const meta = $(".meta", dom);
+  if (meta) meta.textContent = c.props.status === "running" ? "running…" : (c.props.failed > 0 ? `${c.props.failed} failed` : `${c.props.passed} passed`);
+}
+function renderSchema(dom, c) {
+  const svgWrap = $(".schema-svg", dom); svgWrap.innerHTML = "";
+  const entities = c.props.entities || [];
+  if (entities.length === 0) return;
+  const cols = entities.length <= 2 ? entities.length : 2;
+  const rows = Math.ceil(entities.length / cols);
+  const boxW = 180, boxH = 90, padX = 30, padY = 20;
+  const W = cols * boxW + (cols + 1) * padX;
+  const H = rows * boxH + (rows + 1) * padY + 20;
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  const positions = new Map();
+  entities.forEach((e, i) => {
+    const row = Math.floor(i / cols), col = i % cols;
+    positions.set(e.name, { x: padX + col * (boxW + padX), y: padY + row * (boxH + padY), w: boxW, h: boxH });
+  });
+  for (const e of entities) {
+    for (const f of e.fields || []) {
+      if (f.refs && positions.has(f.refs)) {
+        const a = positions.get(e.name), b = positions.get(f.refs);
+        const ln = document.createElementNS(ns, "line");
+        ln.setAttribute("class", "rel");
+        ln.setAttribute("x1", a.x + a.w / 2); ln.setAttribute("y1", a.y);
+        ln.setAttribute("x2", b.x + b.w / 2); ln.setAttribute("y2", b.y + b.h);
+        svg.append(ln);
+      }
+    }
+  }
+  for (const e of entities) {
+    const p = positions.get(e.name);
+    const g = document.createElementNS(ns, "g");
+    const r = document.createElementNS(ns, "rect");
+    r.setAttribute("class", "entity"); r.setAttribute("x", p.x); r.setAttribute("y", p.y);
+    r.setAttribute("width", p.w); r.setAttribute("height", p.h); r.setAttribute("rx", "6");
+    g.append(r);
+    const tt = document.createElementNS(ns, "text");
+    tt.setAttribute("class", "title"); tt.setAttribute("x", p.x + 10); tt.setAttribute("y", p.y + 18);
+    tt.textContent = e.name;
+    g.append(tt);
+    (e.fields || []).slice(0, 5).forEach((f, fi) => {
+      const tx = document.createElementNS(ns, "text");
+      tx.setAttribute("class", "field"); tx.setAttribute("x", p.x + 10); tx.setAttribute("y", p.y + 36 + fi * 12);
+      tx.textContent = f.name + (f.refs ? " (fk)" : "");
+      g.append(tx);
+    });
+    g.addEventListener("click", () => {
+      $$(".entity", svg).forEach(rect => rect.classList.remove("active"));
+      r.classList.add("active");
+      const det = $(".schema-detail", dom);
+      if (det) det.innerHTML = `<b style="color: var(--fg);">${e.name}</b> — ${(e.fields || []).map(f => f.name).join(", ")}`;
+    });
+    svg.append(g);
+  }
+  svgWrap.append(svg);
+}
+function renderDeploy(dom, c) {
+  const wrap = $(".deploy", dom); wrap.innerHTML = "";
+  for (const step of (c.props.steps || [])) {
+    wrap.append(el("div", { class: `deploy-step ${step.status || "pend"}` },
+      el("div", { class: "ico" }, step.status === "done" ? "✓" : step.status === "fail" ? "✕" : ""),
+      el("span", { class: "nm" }, step.name),
+      el("span", { class: "tm" }, step.time || ""),
+    ));
+  }
+  if (c.props.url) {
+    wrap.append(el("div", { style: "padding: 8px 14px; border-top: 1px dashed var(--line); font-size: 12px;" },
+      el("span", { style: "color: var(--fg-dim);" }, "Live at "),
+      el("a", { href: c.props.url, target: "_blank", style: "color: var(--accent); font-family: var(--mono);" }, c.props.url),
+    ));
+  }
+}
+function renderStatsGrid(dom, c) {
+  const wrap = $(".stats-grid", dom); wrap.innerHTML = "";
+  for (const s of (c.props.stats || [])) {
+    const card = el("div", { class: "stat" },
+      el("div", { class: "lbl" }, s.label),
+      el("div", { class: "val " + (s.tone || "") }, String(s.value)),
+      s.delta ? el("div", { class: "delta " + (s.delta.startsWith("-") ? "down" : "") }, s.delta) : null,
+    );
+    if (s.spark && s.spark.length > 1) {
+      const w = 100, h = 28;
+      const max = Math.max(...s.spark, 1), min = Math.min(...s.spark, 0);
+      const pts = s.spark.map((v, i) => {
+        const x = (i / Math.max(s.spark.length - 1, 1)) * w;
+        const y = h - ((v - min) / Math.max(max - min, 1)) * (h - 4) - 2;
+        return [x, y];
+      });
+      const lp = pts.map((p, i) => (i ? "L" : "M") + p[0] + "," + p[1]).join(" ");
+      const ap = lp + ` L${w},${h} L0,${h} Z`;
+      card.append(el("div", { html: `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path class="area" d="${ap}"/><path class="line" d="${lp}"/><circle class="dot" cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="2.5"/></svg>` }));
+    }
+    wrap.append(card);
+  }
+}
 
 function planFill(dom, c) {
   const ul = $("ul", dom); ul.innerHTML = "";

@@ -84,8 +84,43 @@ DO NOT USE: as a substitute for `diff` after an Edit.
 ### `terminal`
 A streaming process output panel. Props: `{ command, lines[], status }`.
 
-USE when: a long-running command the user should watch.
-DO NOT USE: for one-shot `ls` or quick reads — those go in activity.
+USE when: a long-running command the user should watch *that doesn't fit
+a more specific type below* — `docker compose up`, `npm install`,
+`migrate`, etc.
+DO NOT USE: for one-shot `ls` or quick reads (→ activity). DO NOT USE
+for tests, builds, or deploys — those have their own richer types.
+
+### `tests`
+A pass/fail panel with rows per test + a summary. Props: `{ command,
+status, tests: [{ name, status: "pass"|"fail"|"run"|"pend", time? }],
+passed, failed, duration? }`.
+
+USE when: the command is `npm test`, `vitest`, `jest`, `pytest`,
+`cargo test`, etc. Visual pass/fail counts beat scrolling through
+terminal output.
+DO NOT USE: for shell commands that just *use* the test framework
+incidentally.
+
+### `deploy`
+A sequential step list showing deploy progress + the final URL. Props:
+`{ command, status, steps: [{ name, status: "pend"|"run"|"done"|"fail",
+time? }], url? }`.
+
+USE when: the command is `vercel deploy`, `docker push`,
+`netlify deploy`, `kubectl apply`, `fly deploy`. The user wants to see
+phase-by-phase progress and the shipped URL — not the raw build log.
+DO NOT USE: for build steps without a deploy outcome.
+
+### `stats`
+Stat cards with optional sparklines. Props: `{ name, status,
+stats: [{ label, value, tone?: "green"|"yellow"|"red", delta?,
+spark?: number[] }] }`.
+
+USE when: the result contains numeric outcomes the user should see
+visually — bundle sizes, module counts, build time, coverage,
+performance numbers. Most commonly: `npm run build`, `vite build`,
+`webpack`, `rollup`, `tsc -b`.
+DO NOT USE: for prose with a single number ("ran in 3s"); that's a note.
 
 ### `decision`
 A question + clickable options. Props: `{ question, options: [{ label, desc }] }`.
@@ -111,9 +146,14 @@ A hierarchical structure. Props: `{ paths: [{ path, kind, isNew? }] }`.
 USE when: showing a file structure, JSON tree, or directory.
 
 ### `schema`
-An entity-relationship diagram. Props: `{ entities[], relations[] }`.
+An entity-relationship diagram with clickable entities. Props:
+`{ filename?, entities: [{ name, fields: [{ name, type, refs? }] }] }`.
 
-USE when: explaining a data model.
+USE when: a Write touches a `*schema.ts|js|sql` file (or any file under
+`migrations/`) and the content declares 2+ entities (TypeScript
+`interface` blocks or SQL `CREATE TABLE` statements). Surfaces the
+*shape* of the data layer rather than its source code.
+DO NOT USE: for a single-entity declaration; that's a `diff`.
 
 ### `stats`
 Stat cards with optional sparklines. Props: `{ stats: [{ label, value, delta?, spark? }] }`.
@@ -214,12 +254,43 @@ You return:
 }
 ```
 
+**Example D — npm test (route to `tests`, not `terminal`).**
+Input event: `{ kind: "assistant", tool: "Bash", input: { command: "npm test --silent" } }`.
+You return:
+```
+{ "activity": null, "commits": [
+  { "op": "append", "component": { "type": "tests", "props": {
+      "command": "npm test --silent", "status": "running",
+      "tests": [], "passed": 0, "failed": 0
+  } } }
+] }
+```
+Later, when the `tool_result` arrives with "Tests 11 passed (11)", patch
+the same component with `{ status: "done", passed: 11, failed: 0 }`.
+
+**Example E — Write of `src/db/schema.ts` (route to `schema`, not `diff`).**
+Input event: a Write whose `content` contains two `export interface`
+blocks. You return a `schema` component listing both entities and their
+fields; the diff is skipped because the *shape* is the surface, not the
+source.
+
+**Example F — vercel deploy (route to `deploy`, not `terminal`).**
+Input event: `{ tool: "Bash", input: { command: "npx vercel deploy --prod" } }`.
+Return a `deploy` component with sequential steps; on result, patch
+`status: "done"` and capture the production URL.
+
 ## Editorial principles, restated
 
 - A committed component must earn its place. Vertical space is
   precious. When in doubt, prefer `activity`.
 - Two committed components per assistant turn is typical. Five is a
   lot. Ten means you're under-folding.
+- **Prefer the most specific component type.** A `tests` panel beats a
+  `terminal` of test output; a `schema` diagram beats a `diff` of an
+  interface file; a `deploy` step list beats a `terminal` of deploy
+  output; `stats` cards beat a `terminal` of build output. The page
+  exists to *escape raw text*; choose components that visualize
+  structure where you can.
 - The user should be able to scroll back through a finished session
   and see only the structure of the work — plan, decisions, diffs,
   outcomes — never a transcript of every grep.

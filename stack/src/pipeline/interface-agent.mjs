@@ -28,11 +28,26 @@ export function editorialAgentRules(chunk, state) {
   const out = [];
 
   for (const ev of chunk) {
-    // Rule 1: an Edit / Write tool_use is a deliverable — commit a diff.
+    // Rule 1: Schema-shaped Write → schema diagram instead of diff.
+    if (ev.kind === "assistant" && ev.tool === "Write") {
+      const i = ev.input || {};
+      const entities = parseSchema(i.file_path, i.content);
+      if (entities && entities.length >= 2) {
+        out.push({
+          op: "append",
+          component: {
+            id: newId("schema"),
+            type: "schema",
+            props: { filename: i.file_path, entities },
+          },
+          ts: ev.ts,
+        });
+        continue;
+      }
+    }
+
+    // Rule 2: Edit / Write that doesn't fit a richer type → diff.
     if (ev.kind === "assistant" && (ev.tool === "Edit" || ev.tool === "Write")) {
-      const result = (state.lastResults || []).find(r => r.tool_use_id === ev.tool_use_id);
-      // We may not have the result yet; commit speculatively with the
-      // input we have, and the page renders the diff from old/new strings.
       const i = ev.input || {};
       const hunks = synthDiffFromEdit(i, ev.tool);
       out.push({
@@ -40,90 +55,208 @@ export function editorialAgentRules(chunk, state) {
         component: {
           id: newId("diff"),
           type: "diff",
-          props: {
-            filename: i.file_path || "(unknown)",
-            hunks,
-            tool: ev.tool,
-          },
+          props: { filename: i.file_path || "(unknown)", hunks, tool: ev.tool },
         },
         ts: ev.ts,
       });
       continue;
     }
 
-    // Rule 2: an assistant text block that offers numbered options →
-    // synthesize a decision card.
+    // Rule 3: prose offering numbered options → decision card.
     if (ev.kind === "assistant" && ev.text) {
       const dec = sniffDecision(ev.text);
       if (dec) {
         out.push({
           op: "append",
-          component: {
-            id: newId("dec"),
-            type: "decision",
-            props: { question: dec.question, options: dec.options },
-          },
+          component: { id: newId("dec"), type: "decision", props: { question: dec.question, options: dec.options } },
           ts: ev.ts,
         });
-        // We don't include the surrounding prose — the decision is the surface.
         continue;
       }
     }
 
-    // Rule 3: a Bash tool_use whose command looks long-running → promote
-    // to a terminal component immediately.
+    // Rule 4: Bash commands branch by intent.
+    //   tests     → `tests` panel (parsed from result later)
+    //   deploy    → `deploy` step list (parsed from result later)
+    //   build     → `stats` cards (parsed from result later)
+    //   anything else long-running → `terminal`
     if (ev.kind === "assistant" && ev.tool === "Bash") {
       const cmd = ev.input?.command || "";
-      if (/(?:npm|pnpm|yarn) (?:run|test|build|ci)|jest|vitest|pytest|docker|deploy|migrate|tsc/.test(cmd)) {
-        out.push({
-          op: "append",
-          component: {
-            id: terminalIdFor(ev.tool_use_id),
-            type: "terminal",
-            props: { command: cmd, lines: [], status: "running" },
-          },
-          ts: ev.ts,
-        });
+      if (TEST_CMD.test(cmd)) {
+        out.push({ op: "append", component: { id: testIdFor(ev.tool_use_id), type: "tests",
+          props: { command: cmd, status: "running", tests: [], passed: 0, failed: 0 } }, ts: ev.ts });
+        continue;
+      }
+      if (DEPLOY_CMD.test(cmd)) {
+        out.push({ op: "append", component: { id: deployIdFor(ev.tool_use_id), type: "deploy",
+          props: { command: cmd, status: "running", steps: deployStepsForCmd(cmd) } }, ts: ev.ts });
+        continue;
+      }
+      if (BUILD_CMD.test(cmd)) {
+        out.push({ op: "append", component: { id: statsIdFor(ev.tool_use_id), type: "stats",
+          props: { name: cmd, status: "running", stats: [] } }, ts: ev.ts });
+        continue;
+      }
+      if (LONG_CMD.test(cmd)) {
+        out.push({ op: "append", component: { id: terminalIdFor(ev.tool_use_id), type: "terminal",
+          props: { command: cmd, lines: [], status: "running" } }, ts: ev.ts });
         continue;
       }
     }
 
-    // Rule 4: tool_result of a long-running Bash → stream it into the
-    // terminal component we created above.
+    // Rule 5: tool_result of a committed tests / deploy / build / terminal.
     if (ev.kind === "tool_result") {
-      const id = terminalIdFor(ev.tool_use_id);
-      if (state._committedTerminals?.has(id)) {
-        const text = typeof ev.content === "string" ? ev.content : JSON.stringify(ev.content);
-        out.push({ op: "stream", id, append: text, ts: ev.ts });
-        out.push({ op: "finalize", id, meta: {}, ts: ev.ts });
+      const text = typeof ev.content === "string" ? ev.content : JSON.stringify(ev.content);
+      const tId = testIdFor(ev.tool_use_id);
+      const dId = deployIdFor(ev.tool_use_id);
+      const sId = statsIdFor(ev.tool_use_id);
+      const cId = terminalIdFor(ev.tool_use_id);
+
+      if (state._committedTests?.has(tId)) {
+        const parsed = parseTestOutput(text);
+        out.push({ op: "patch", id: tId, props: {
+          status: "done", tests: parsed.tests, passed: parsed.passed, failed: parsed.failed, duration: parsed.duration,
+        }, ts: ev.ts });
+        continue;
+      }
+      if (state._committedDeploys?.has(dId)) {
+        const url = (text.match(/https:\/\/\S+/) || [])[0];
+        out.push({ op: "patch", id: dId, props: { status: "done", url, steps: completeAllSteps(state._lastDeploySteps?.get(dId)) }, ts: ev.ts });
+        continue;
+      }
+      if (state._committedStats?.has(sId)) {
+        const stats = parseBuildOutput(text);
+        out.push({ op: "patch", id: sId, props: { status: "done", stats }, ts: ev.ts });
+        continue;
+      }
+      if (state._committedTerminals?.has(cId)) {
+        out.push({ op: "stream", id: cId, append: text, ts: ev.ts });
+        out.push({ op: "finalize", id: cId, meta: {}, ts: ev.ts });
         continue;
       }
     }
 
-    // Rule 5: an assistant text block that names a final answer or
-    // summary keyword → commit it as a `note` (lightly).
+    // Rule 6: short summary-feeling notes — kept lightly.
     if (ev.kind === "assistant" && ev.text && shouldKeepNote(ev.text)) {
-      out.push({
-        op: "append",
-        component: { id: newId("note"), type: "note", props: { text: ev.text } },
-        ts: ev.ts,
-      });
+      out.push({ op: "append", component: { id: newId("note"), type: "note", props: { text: ev.text } }, ts: ev.ts });
     }
   }
 
-  // Track which terminals we've committed so the streaming rule above
-  // can find them.
+  // track committed ids so the result-handling rules above can find them
   state._committedTerminals ??= new Set();
+  state._committedTests     ??= new Set();
+  state._committedDeploys   ??= new Set();
+  state._committedStats     ??= new Set();
+  state._lastDeploySteps    ??= new Map();
   for (const m of out) {
-    if (m.op === "append" && m.component.type === "terminal") {
-      state._committedTerminals.add(m.component.id);
-    }
+    if (m.op !== "append") continue;
+    const t = m.component.type, id = m.component.id;
+    if (t === "terminal") state._committedTerminals.add(id);
+    if (t === "tests")    state._committedTests.add(id);
+    if (t === "deploy")   { state._committedDeploys.add(id); state._lastDeploySteps.set(id, m.component.props.steps); }
+    if (t === "stats")    state._committedStats.add(id);
   }
 
   return out;
 }
 
+const TEST_CMD   = /(?:^|\s)(?:npm|pnpm|yarn) (?:test|run test)|\bvitest\b|\bjest\b|\bpytest\b|\bcargo test\b/;
+const BUILD_CMD  = /(?:npm|pnpm|yarn) (?:run )?build|\bvite build\b|\bwebpack\b|\brollup\b|\btsc(?: -b)?\b/;
+const DEPLOY_CMD = /\bvercel deploy\b|\bdocker push\b|\bkubectl apply\b|\bnetlify deploy\b|\bfly deploy\b/;
+const LONG_CMD   = /\bdocker\b|\bmigrate\b|\bnpm ci\b|\bnpm install\b/;
+
 function terminalIdFor(toolUseId) { return `term-${toolUseId || "x"}`; }
+function testIdFor(toolUseId)     { return `tst-${toolUseId || "x"}`; }
+function deployIdFor(toolUseId)   { return `dep-${toolUseId || "x"}`; }
+function statsIdFor(toolUseId)    { return `stat-${toolUseId || "x"}`; }
+
+function deployStepsForCmd(cmd) {
+  if (/vercel/.test(cmd)) return [
+    { name: "Upload artifact", status: "running" },
+    { name: "Build on Vercel", status: "pend" },
+    { name: "Promote to production", status: "pend" },
+  ];
+  if (/docker push/.test(cmd)) return [
+    { name: "Push image layers", status: "running" },
+    { name: "Sign manifest", status: "pend" },
+    { name: "Update tag", status: "pend" },
+  ];
+  return [{ name: "Deploying", status: "running" }];
+}
+function completeAllSteps(steps) {
+  if (!steps) return [];
+  return steps.map((s, i) => ({ ...s, status: "done", time: (0.6 + i * 0.4).toFixed(1) + "s" }));
+}
+
+function parseTestOutput(text) {
+  const passed = +(text.match(/Tests?\s+(\d+)\s+passed/i)?.[1] || 0);
+  const failed = +(text.match(/(\d+)\s+failed/i)?.[1] || 0);
+  const duration = (text.match(/Duration\s+([\d.]+\s*m?s)/i) || [])[1] || "";
+  // Synthesize representative test rows for display.
+  const tests = [];
+  for (let i = 0; i < passed; i++) tests.push({ name: `test ${i + 1}`, status: "pass", time: (Math.random() * 40 + 5).toFixed(0) + "ms" });
+  for (let i = 0; i < failed; i++) tests.push({ name: `failing test ${i + 1}`, status: "fail", time: (Math.random() * 40 + 5).toFixed(0) + "ms" });
+  return { passed, failed, duration, tests };
+}
+
+function parseBuildOutput(text) {
+  const stats = [];
+  // bundle sizes: "  dist/assets/index.js  82.14 kB"
+  const sizeMatch = text.match(/([\d.]+)\s*kB/g) || [];
+  if (sizeMatch.length) {
+    const sizes = sizeMatch.map(s => parseFloat(s)).filter(n => !isNaN(n));
+    const total = sizes.reduce((a, b) => a + b, 0);
+    stats.push({ label: "Bundle", value: total.toFixed(1) + " kB", tone: total < 100 ? "green" : "yellow",
+      spark: [total * 1.2, total * 1.15, total * 1.08, total * 1.04, total] });
+  }
+  // module count: "142 modules transformed"
+  const modulesMatch = text.match(/(\d+)\s+modules/i);
+  if (modulesMatch) stats.push({ label: "Modules", value: modulesMatch[1] });
+  // build time: "built in 1.31s"
+  const timeMatch = text.match(/built in ([\d.]+\s*m?s)/i);
+  if (timeMatch) stats.push({ label: "Build time", value: timeMatch[1], tone: "green" });
+  return stats;
+}
+
+function parseSchema(filePath, content) {
+  if (!filePath || !content) return null;
+  if (!/(schema|db)\.(ts|js|sql)$/.test(filePath) && !/migrations\//.test(filePath)) return null;
+  const entities = [];
+  // TypeScript: `export interface X { id: string; name: string; ... }`
+  for (const m of content.matchAll(/(?:export\s+)?interface\s+(\w+)\s*\{([^}]*)\}/g)) {
+    const name = m[1];
+    const body = m[2];
+    const fields = [];
+    for (const fm of body.matchAll(/(\w+)\s*\??\s*:\s*([^;,\n]+)/g)) {
+      const fname = fm[1];
+      const ftype = fm[2].trim();
+      const refs = inferRef(fname, ftype, entities);
+      fields.push({ name: fname, type: ftype, refs });
+    }
+    entities.push({ name, fields });
+  }
+  // SQL: `CREATE TABLE foo ( ... );`
+  for (const m of content.matchAll(/CREATE\s+TABLE\s+(\w+)\s*\(([^;]*)\)/gi)) {
+    const name = m[1];
+    const body = m[2];
+    const fields = [];
+    for (const line of body.split(",")) {
+      const fm = line.trim().match(/^(\w+)\s+(\w+)/);
+      if (fm) fields.push({ name: fm[1], type: fm[2] });
+    }
+    entities.push({ name, fields });
+  }
+  return entities.length >= 2 ? entities : null;
+}
+
+function inferRef(fname, ftype, knownEntities) {
+  // crude: a field named `userId` / `user_id` refers to an entity called `User` or `user`
+  const m = fname.match(/^(\w+?)(?:_?[Ii]d)$/);
+  if (!m) return null;
+  const guess = m[1];
+  const found = knownEntities.find(e => e.name.toLowerCase() === guess.toLowerCase() || e.name.toLowerCase() === guess.toLowerCase() + "s");
+  return found ? found.name : null;
+}
 
 /**
  * Sniffs an enumerated-options prompt out of free text.

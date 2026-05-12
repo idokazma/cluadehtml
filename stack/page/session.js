@@ -101,7 +101,67 @@ const renderers = {
       return dom;
     },
   },
-};
+
+  /* tests panel — pass/fail rows + summary */
+  tests: {
+    mount: (c) => {
+      const dom = el("div", { class: "component" },
+        header("✓", "tests", "$ " + (c.props.command || ""),
+          c.props.status === "running" ? "running…" : ((c.props.failed || 0) > 0 ? `${c.props.failed} failed` : "all passed")),
+        el("div", { class: "tests" }),
+        el("div", { class: "tests-summary" }),
+      );
+      renderTests(dom, c);
+      return dom;
+    },
+    update: (dom, c) => renderTests(dom, c),
+  },
+
+  /* schema diagram */
+  schema: {
+    mount: (c) => {
+      const dom = el("div", { class: "component schema" },
+        header("🗂", "schema", c.props.filename || "schema",
+          (c.props.entities || []).length + " tables"),
+        el("div", { class: "schema-svg" }),
+        el("div", { class: "schema-detail" }, "Click a table to see its purpose."),
+      );
+      renderSchema(dom, c);
+      return dom;
+    },
+  },
+
+  /* deploy: sequential progress steps */
+  deploy: {
+    mount: (c) => {
+      const dom = el("div", { class: "component" },
+        header("🚀", "deploy", "$ " + (c.props.command || ""),
+          c.props.status === "done" ? (c.props.url ? "deployed" : "done") : "running…"),
+        el("div", { class: "deploy" }),
+      );
+      renderDeploy(dom, c);
+      return dom;
+    },
+    update: (dom, c) => {
+      const meta = $(".meta", dom);
+      if (meta) meta.textContent = c.props.status === "done" ? (c.props.url ? "deployed" : "done") : "running…";
+      renderDeploy(dom, c);
+    },
+  },
+
+  /* stats grid with optional sparklines */
+  stats: {
+    mount: (c) => {
+      const dom = el("div", { class: "component" },
+        header("📊", "stats", c.props.name || "build output",
+          (c.props.stats || []).length + " metrics"),
+        el("div", { class: "stats-grid" }),
+      );
+      renderStatsGrid(dom, c);
+      return dom;
+    },
+    update: (dom, c) => renderStatsGrid(dom, c),
+  },
 
 function header(icon, kind, name, meta) {
   return el("div", { class: "c-head" },
@@ -139,6 +199,145 @@ function renderDiff(dom, c) {
       ));
       if (k !== "-") line++;
     }
+  }
+}
+
+function renderTests(dom, c) {
+  const wrap = $(".tests", dom);
+  wrap.innerHTML = "";
+  const tests = c.props.tests || [];
+  for (const t of tests) {
+    wrap.append(el("div", { class: `test ${t.status || "pend"}` },
+      el("span", { class: "badge" }, t.status === "pass" ? "✓" : t.status === "fail" ? "✕" : ""),
+      el("span", { class: "nm" }, t.name),
+      el("span", { class: "tm" }, t.time || ""),
+    ));
+  }
+  const total = c.props.passed || 0;
+  const failed = c.props.failed || 0;
+  const sum = $(".tests-summary", dom);
+  if (sum) {
+    sum.innerHTML = "";
+    sum.append(
+      el("span", null, el("b", { class: "ok" }, String(total)), " passed"),
+      failed > 0 ? el("span", null, el("b", { class: "bad" }, String(failed)), " failed") : null,
+      c.props.duration ? el("span", null, "in ", el("b", null, c.props.duration)) : null,
+    );
+  }
+  const meta = $(".meta", dom);
+  if (meta) meta.textContent = c.props.status === "running" ? "running…" : (failed > 0 ? `${failed} failed` : `${total} passed`);
+}
+
+function renderSchema(dom, c) {
+  const svgWrap = $(".schema-svg", dom);
+  svgWrap.innerHTML = "";
+  const entities = c.props.entities || [];
+  if (entities.length === 0) {
+    svgWrap.append(el("div", { style: "padding: 14px; color: var(--fg-mute); font-size: 12px;" }, "(no entities parsed)"));
+    return;
+  }
+  // simple grid layout
+  const cols = entities.length <= 2 ? entities.length : 2;
+  const rows = Math.ceil(entities.length / cols);
+  const boxW = 180, boxH = 90, padX = 30, padY = 20;
+  const W = cols * boxW + (cols + 1) * padX;
+  const H = rows * boxH + (rows + 1) * padY + 20;
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  // entities
+  const positions = new Map();
+  entities.forEach((e, i) => {
+    const row = Math.floor(i / cols), col = i % cols;
+    const x = padX + col * (boxW + padX);
+    const y = padY + row * (boxH + padY);
+    positions.set(e.name, { x, y, w: boxW, h: boxH });
+  });
+  // relationships
+  for (const e of entities) {
+    for (const f of e.fields || []) {
+      if (f.refs && positions.has(f.refs)) {
+        const a = positions.get(e.name), b = positions.get(f.refs);
+        const ln = document.createElementNS(ns, "line");
+        ln.setAttribute("class", "rel");
+        ln.setAttribute("x1", a.x + a.w / 2); ln.setAttribute("y1", a.y);
+        ln.setAttribute("x2", b.x + b.w / 2); ln.setAttribute("y2", b.y + b.h);
+        svg.append(ln);
+      }
+    }
+  }
+  // entity boxes
+  for (const e of entities) {
+    const p = positions.get(e.name);
+    const g = document.createElementNS(ns, "g");
+    const r = document.createElementNS(ns, "rect");
+    r.setAttribute("class", "entity"); r.setAttribute("x", p.x); r.setAttribute("y", p.y);
+    r.setAttribute("width", p.w); r.setAttribute("height", p.h); r.setAttribute("rx", "6");
+    g.append(r);
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("class", "title"); t.setAttribute("x", p.x + 10); t.setAttribute("y", p.y + 18);
+    t.textContent = e.name;
+    g.append(t);
+    (e.fields || []).slice(0, 5).forEach((f, fi) => {
+      const tx = document.createElementNS(ns, "text");
+      tx.setAttribute("class", "field"); tx.setAttribute("x", p.x + 10); tx.setAttribute("y", p.y + 36 + fi * 12);
+      tx.textContent = f.name + (f.refs ? " (fk)" : "");
+      g.append(tx);
+    });
+    g.addEventListener("click", () => {
+      $$(".entity", svg).forEach(rect => rect.classList.remove("active"));
+      r.classList.add("active");
+      const detail = $(".schema-detail", dom);
+      if (detail) {
+        detail.innerHTML = `<b style="color: var(--fg);">${e.name}</b> — ${(e.fields || []).map(f => f.name).join(", ")}`;
+      }
+    });
+    svg.append(g);
+  }
+  svgWrap.append(svg);
+}
+
+function renderDeploy(dom, c) {
+  const wrap = $(".deploy", dom);
+  wrap.innerHTML = "";
+  for (const step of c.props.steps || []) {
+    wrap.append(el("div", { class: `deploy-step ${step.status || "pend"}` },
+      el("div", { class: "ico" }, step.status === "done" ? "✓" : step.status === "fail" ? "✕" : ""),
+      el("span", { class: "nm" }, step.name),
+      el("span", { class: "tm" }, step.time || ""),
+    ));
+  }
+  if (c.props.url) {
+    wrap.append(el("div", { style: "padding: 8px 14px; border-top: 1px dashed var(--line); font-size: 12px;" },
+      el("span", { style: "color: var(--fg-dim);" }, "Live at "),
+      el("a", { href: c.props.url, target: "_blank", style: "color: var(--accent); font-family: var(--mono);" }, c.props.url),
+    ));
+  }
+}
+
+function renderStatsGrid(dom, c) {
+  const wrap = $(".stats-grid", dom);
+  wrap.innerHTML = "";
+  for (const s of c.props.stats || []) {
+    const card = el("div", { class: "stat" },
+      el("div", { class: "lbl" }, s.label),
+      el("div", { class: "val " + (s.tone || "") }, String(s.value)),
+      s.delta ? el("div", { class: "delta " + (s.delta.startsWith("-") ? "down" : "") }, s.delta) : null,
+    );
+    if (s.spark && s.spark.length > 1) {
+      const w = 100, h = 28;
+      const max = Math.max(...s.spark, 1), min = Math.min(...s.spark, 0);
+      const pts = s.spark.map((v, i) => {
+        const x = (i / Math.max(s.spark.length - 1, 1)) * w;
+        const y = h - ((v - min) / Math.max(max - min, 1)) * (h - 4) - 2;
+        return [x, y];
+      });
+      const lp = pts.map((p, i) => (i ? "L" : "M") + p[0] + "," + p[1]).join(" ");
+      const ap = lp + ` L${w},${h} L0,${h} Z`;
+      card.append(el("div", { html: `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path class="area" d="${ap}"/><path class="line" d="${lp}"/><circle class="dot" cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="2.5"/></svg>` }));
+    }
+    wrap.append(card);
   }
 }
 
