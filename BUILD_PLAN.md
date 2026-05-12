@@ -95,13 +95,72 @@ project's cwd; no extra registration step.
 
 The main agent doesn't pick its own UI. It just does the work it was
 asked to do. Beside it runs a smaller, faster, cheaper **interface
-agent** whose only job is to decide: *for this chunk of the main
-agent's output, which component best expresses it?*
+agent** with two responsibilities, in this order:
+
+1. **Decide if the event deserves a component at all.** Most internal
+   tool calls — exploratory reads, scratch greps, intermediate bash
+   commands — don't. They roll up into a single live "activity"
+   indicator.
+2. **For events that do deserve a component, decide what shape it
+   takes.** Plan, decision, diff, chart, code, comparison,
+   playground, schema, raw HTML escape hatch, etc.
 
 This is **not** a deterministic mapping table. The same tool call
-can become different components in different contexts — and many of
-the most useful components (decision cards, charts, diagrams) come
-from *text* the main agent wrote, not from a tool call at all.
+can be silently absorbed into the activity indicator in one context
+(exploratory) and surfaced as a prominent diff in another (the
+deliverable). And many of the most useful components — decision
+cards, charts, diagrams — come from *text* the main agent wrote, not
+from a tool call at all.
+
+### Editorial judgment — what earns a place on the page
+
+A component on the page is expensive: it takes vertical space, it
+demands the user's attention, it accumulates in the history. So the
+interface agent applies a budget. An event becomes a committed
+component when one or more of these is true:
+
+- **Deliverable.** The agent finished something the user actually
+  cares about: a diff, a generated file, a test result, a deploy
+  outcome, a final answer.
+- **Decision point.** The user needs to pick, approve, or steer —
+  prose offering options, an ambiguous direction, a tradeoff.
+- **State change.** Something durable in the project shifted: a
+  migration ran, a config changed, a new file was created, the
+  schema evolved.
+- **Summary or rollup.** The agent has done a lot of internal work
+  and wants to surface a digest ("looked at 14 files; here are the
+  3 places that matter").
+- **Explicitly asked for.** The user prompted "show me the schema",
+  "compare these three approaches", "explain this function" — the
+  ask itself is the request for a component.
+- **Long-running.** Something will take a while; the user should
+  see progress (a deploy, a long test run, a streamed search across
+  a large repo).
+
+Otherwise: the event folds into the **activity indicator**.
+
+### The activity indicator
+
+A single component, sticky-ish at the bottom of the live region,
+that updates continuously as the main agent works. It shows the
+current step in short prose plus a quiet metric:
+
+```
+  Reading src/payments/charge.ts            (8 of 14 files)
+  Looking for the streak-reset bug           (2 grep hits)
+  Writing the migration                      (1.4 s)
+```
+
+When the agent transitions to "doing something the user should see",
+the activity indicator clears and a committed component appears
+instead. The user can expand the indicator at any time to drill
+into the underlying tool calls (collapsed by default).
+
+This is the dial that separates a *narration* from a *log*. A
+session log is exhaustive: every tool call rendered, every result
+shown, easy to skim and easy to drown in. A narration is editorial:
+the user sees the structure of the work, the decisions, and the
+outputs, with the means available to drill deeper when they care.
 
 ### Stream events we consume
 
@@ -117,105 +176,104 @@ From `claude -p --output-format stream-json` (and the JSONL format):
 A separate model call (good fit: Haiku 4.5) wraps the live stream. It
 receives a small window of events at a time — say, every settled chunk:
 a complete `text` block, a `tool_use` + its `tool_result`, an
-`assistant` turn boundary — and outputs a list of component descriptors.
-Its system prompt holds the **component vocabulary**: a versioned schema
-of every component type the page can render. Its job is to pattern-match
-each chunk to the best fit.
+`assistant` turn boundary — and outputs *either* an `activity` update
+(the default, low-signal events) *or* a list of committed component
+descriptors (when something earns the surface). Its system prompt
+holds the **component vocabulary** plus the **editorial criteria**
+above.
 
 Concretely:
 
 ```
-incoming:  { kind: "text", text: "There are 3 reasonable ways to
-              handle skipped days:\n1) Auto grace day...\n2) Manual
-              freeze...\n3) Both...\nWhich do you prefer?" }
+incoming (a Read call exploring a file):
+  { kind: "tool_use", tool: "Read", input: { file_path: "src/charge.ts" } }
+  { kind: "tool_result", text: "..." }
 
 interface agent output:
-  [
-    { type: "note",     props: { text: "There are 3 reasonable ways..." } },
-    { type: "decision", props: {
-        question: "How should we handle skipped days?",
-        options: [
-          { label: "Auto grace day",   desc: "Every Nth missed day is free, no UI." },
-          { label: "Manual freeze",    desc: "User taps 'freeze' before midnight." },
-          { label: "Both",             desc: "1 auto + 2 manual / month." },
-        ]
-    }}
-  ]
+  { activity: { name: "Looking at charge.ts", metric: "3 of 14 files" } }
+  // ↑ no committed component. just updates the indicator.
+
+incoming (the diff that fixes the bug):
+  { kind: "tool_use", tool: "Edit", input: { file_path: "...", old: "...", new: "..." } }
+  { kind: "tool_result", text: "ok" }
+
+interface agent output:
+  [ { type: "diff", props: { filename: "...", hunks: [...] } } ]
+  // ↑ this is a deliverable. commit it.
+
+incoming (prose offering 3 options):
+  { kind: "text", text: "There are 3 reasonable ways..." }
+
+interface agent output:
+  [ { type: "decision", props: { question, options[] } } ]
+  // ↑ text that demands a choice. commit a decision card.
 ```
 
-The main agent wrote prose. The interface agent saw "this is asking the
-user to choose among options" and produced a `decision` component that
-gives the user buttons instead of asking them to type back which option
-they want.
-
-This is the leverage of the design. The main agent gets to be natural
-and verbose; the interface agent shapes its output into something the
-user can interact with.
+The main agent stays natural and verbose; the interface agent
+*shapes* its output into something the user can interact with, and
+*filters* the noise from the signal.
 
 ### Component vocabulary
 
 The interface agent's prompt includes a strict, versioned list of the
 component types it is allowed to emit. Each entry has:
 
-- name (`decision`, `plan`, `diff`, `chart`, `playground`, `compare`,
-  `designs`, `schema`, `code`, `tree`, `terminal`, `tests`, `commits`,
-  `deploy`, `stats`, `grep`, `note`, …)
+- name (`activity`, `decision`, `plan`, `diff`, `chart`,
+  `playground`, `compare`, `designs`, `schema`, `code`, `tree`,
+  `terminal`, `tests`, `commits`, `deploy`, `stats`, `grep`,
+  `summary`, `note`, …)
 - the prop schema (JSON)
-- when to use it (one or two sentences)
-- when *not* to use it
+- **when to use it** (one or two sentences)
+- **when *not* to use it** — the editorial guard
 
 When none of the components in the vocabulary fit, there is an
 **`html` escape hatch**: the agent can emit raw HTML for a one-off
 component, which is rendered inside a sandboxed iframe with strict
-CSP. This is how diagrams, plots, and unusual visualizations land —
-the model improvises a small chunk of HTML/SVG.
+CSP. This is how unusual visualizations land — plots, custom
+diagrams, throwaway editors.
 
 ### Three layers of decision
 
-In practice, the interface agent's job sits on top of two cheaper
+The interface agent's editorial pass sits on top of two cheaper
 layers, used together to keep latency and cost down:
 
-1. **Fast deterministic prefilters.** Some events almost always have
-   the same component shape: a `Bash` tool_use is a `terminal`, an
-   `Edit` is a `diff`, a `Read` is a `file-viewer`. These get a
-   pre-mapped descriptor immediately, so the user sees something
-   render without waiting on another model call.
+1. **Fast deterministic prefilter (mostly a buffer, not a renderer).**
+   For most tool calls, the prefilter doesn't commit a component at
+   all — it just updates the activity indicator and *buffers* the
+   event for the interface agent to consider. Only a small handful
+   of cases auto-commit without waiting on the interface agent:
+   - `TodoWrite` (always becomes / updates the `plan` component)
+   - A `Bash` command marked long-running (auto-commits a `terminal`
+     so the user can watch live)
+   - Streaming output the user has opted to follow
 
-2. **Interface agent overrides + enriches.** The interface agent runs
-   in parallel. It can:
-   - *Replace* a prefiltered descriptor (e.g. "this terminal output
-     contains JSON — render it as a tree instead").
-   - *Enrich* with extra props (e.g. extract a sparkline of numbers
-     from a tool_result and add a `chart` component beside the
-     existing `terminal`).
-   - *Insert* new components the prefilter missed entirely (e.g. the
-     `decision` example above, which arises from text).
+2. **Interface agent runs every settled chunk.** It receives the
+   buffered events plus context and outputs:
+   - an `activity` update (default — most chunks)
+   - 0+ committed component descriptors (when something earns the
+     surface)
+   - replacements / enrichments to previously committed components
+     (e.g. "the diff you already showed should also have a small
+     'why' summary attached")
 
 3. **Explicit model emission.** Sometimes the main agent knows
    exactly what UI it wants. It can call a `render_*` MCP tool to
-   request a specific component without going through the interface
-   agent's interpretation. Used sparingly — mostly for rich
-   interactive scaffolds (`render_playground`, `render_designs`)
-   where it knows the structure.
-
-The interface agent is the smart layer in the middle: the deterministic
-layer is dumb-and-instant, the explicit layer is the model's
-self-authored UI, and the interface agent fills the gap where
-intelligence is needed but the main agent didn't pre-author the form.
+   request a specific component, bypassing the editorial pass. Used
+   sparingly for rich interactive scaffolds where the model has
+   unique structural knowledge.
 
 ### Why a separate agent
 
 - **The main agent stays natural.** It doesn't have to clutter its
-  own thinking with UI choices. It writes prose, runs tools, produces
-  diffs. The interface agent worries about how the user sees it.
-- **The interface agent stays focused.** Its prompt is small,
-  cacheable, mostly the component vocabulary. Latency is low. Cost
-  per turn is small.
-- **Failure mode is graceful.** If the interface agent times out or
-  errors, the prefilter still produced a usable component. Worst case
-  is "less interactive than it could have been," never "broken."
-- **The vocabulary can evolve.** Adding a new component type is a
-  vocabulary entry, not a code patch in the wrapper.
+  thinking with UI choices or self-censor noisy tool calls.
+- **The editorial budget is small and well-scoped.** Cheaper model,
+  cacheable prompt, low latency.
+- **Failure mode is graceful.** If the interface agent times out,
+  the activity indicator keeps updating and the missed chunk just
+  doesn't get a committed component. Never breaks the session.
+- **The vocabulary and the editorial criteria can evolve.** Adding
+  a component, or tightening "when not to surface", is a prompt
+  edit, not a code patch.
 
 ---
 

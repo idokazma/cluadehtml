@@ -569,74 +569,139 @@
   </p>
 
   <!-- ============================================================ -->
-  <h2 id="mapping"><span class="num">3</span><b>How agent output becomes components</b></h2>
+  <h2 id="mapping"><span class="num">3</span><b>The interface agent is an editor</b></h2>
   <p>
-    Rendering decisions are made by an <b>interface agent</b>, not a
-    fixed table. The interface agent's job is small and well-scoped:
-    look at a chunk of the main agent's stream, decide what component
-    expresses it best. It runs on top of a thin deterministic
-    prefilter (for the always-the-same cases) and beside an explicit
-    MCP channel (for the rare cases where the main agent already knows
-    what UI it wants). Three layers, increasing intelligence and cost.
+    Not every event the main agent fires deserves a component. An agent
+    that reads 20 files to fix one line of code should surface
+    <i>that line and its fix</i> — not 20 file viewers. The interface
+    agent's first question for every event isn't <i>"what component is
+    this?"</i> but <i>"does this earn a place on the page?"</i> Most
+    internal tool calls fold into a single live <b>activity
+    indicator</b>; only events that earn the surface graduate into
+    committed components.
   </p>
 
-  <h3>Layer 1 · deterministic prefilter (instant)</h3>
+  <div class="callout">
+    <b>Sessions are narrations, not logs.</b> A log is exhaustive: every
+    tool call rendered, easy to skim and easy to drown in. A narration
+    is editorial: the user sees the structure of the work, the
+    decisions, and the outputs — with the means available to drill
+    deeper when they care.
+  </div>
+
+  <h3>What earns a committed component</h3>
+  <p>The interface agent surfaces an event when at least one is true:</p>
+  <div class="legend">
+    <div class="item">
+      <div class="ic" style="color: var(--green);">★</div>
+      <div><div class="nm">deliverable</div><div class="ds">a diff, a generated file, a test outcome, a final answer</div></div>
+    </div>
+    <div class="item">
+      <div class="ic" style="color: var(--yellow);">?</div>
+      <div><div class="nm">decision point</div><div class="ds">the user needs to pick, approve, or steer</div></div>
+    </div>
+    <div class="item">
+      <div class="ic" style="color: var(--blue);">△</div>
+      <div><div class="nm">state change</div><div class="ds">migration, config edit, new file, schema evolution</div></div>
+    </div>
+    <div class="item">
+      <div class="ic" style="color: var(--purple);">⤴</div>
+      <div><div class="nm">summary / rollup</div><div class="ds">"looked at 14 files; here are the 3 that matter"</div></div>
+    </div>
+    <div class="item">
+      <div class="ic" style="color: var(--accent);">!</div>
+      <div><div class="nm">explicitly asked</div><div class="ds">"show the schema", "compare these three"</div></div>
+    </div>
+    <div class="item">
+      <div class="ic" style="color: var(--pink);">⌛</div>
+      <div><div class="nm">long-running</div><div class="ds">deploy, big test run, large streamed operation</div></div>
+    </div>
+  </div>
+  <p style="margin-top: 10px;">
+    Otherwise: the event folds into the <b>activity indicator</b>. The
+    user can expand it to drill into the underlying tool calls; the
+    default is silence on noise, clarity on what matters.
+  </p>
+
+  <h3 style="margin-top: 22px;">The activity indicator</h3>
   <p>
-    Some shapes are obvious and the user shouldn't wait on a model
-    call. These get a baseline descriptor immediately, so a component
-    appears the moment the event arrives.
+    A single component, sticky-ish at the bottom of the live region,
+    that updates continuously as the main agent works. Most of the
+    session lives here.
+  </p>
+  <div style="background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 8px; padding: 12px 16px; font-family: var(--mono); font-size: 12.5px; color: var(--fg-dim); margin: 6px 0 0;">
+    <div style="display: flex; gap: 10px; align-items: center; padding: 4px 0;">
+      <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite;"></span>
+      <span style="color: var(--fg);">Reading <code>src/payments/charge.ts</code></span>
+      <span style="margin-left: auto; color: var(--fg-mute);">8 of 14 files</span>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center; padding: 4px 0; opacity: 0.7;">
+      <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--line-2);"></span>
+      <span>Searching for streak-reset references</span>
+      <span style="margin-left: auto; color: var(--fg-mute);">2 hits</span>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center; padding: 4px 0; opacity: 0.5;">
+      <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--line-2);"></span>
+      <span>Writing migration 0002</span>
+      <span style="margin-left: auto; color: var(--fg-mute);">1.4 s</span>
+    </div>
+    <div style="color: var(--fg-mute); font-size: 11px; margin-top: 6px; cursor: pointer;">▸ Expand 12 underlying tool calls</div>
+  </div>
+
+  <h3 style="margin-top: 22px;">Three layers (revised)</h3>
+  <p>
+    The same three layers as before, but with the first reframed as a
+    <i>buffer</i>, not a renderer. The interface agent decides what gets
+    committed; the prefilter mostly just stages.
   </p>
   <div class="mapping">
     <table>
-      <thead>
-        <tr><th>obvious case</th><th></th><th>baseline component</th><th>notes</th></tr>
-      </thead>
+      <thead><tr><th>layer</th><th>role</th><th>typical action</th></tr></thead>
       <tbody>
-        <tr><td><code>Bash</code></td><td class="arrow">→</td><td><span class="kind term">terminal</span></td><td>streaming; interface agent may insert a chart beside if numeric</td></tr>
-        <tr><td><code>Edit</code> · <code>Write</code></td><td class="arrow">→</td><td><span class="kind diff">diff</span></td><td>almost never wants overriding</td></tr>
-        <tr><td><code>Read</code></td><td class="arrow">→</td><td><span class="kind code">file-viewer</span></td><td>interface agent may replace with a tree if browsing code</td></tr>
-        <tr><td><code>Glob</code> · <code>Grep</code></td><td class="arrow">→</td><td><span class="kind search">search</span></td><td>interface agent may bucket into a directory tree if many hits</td></tr>
-        <tr><td><code>WebFetch</code> · <code>WebSearch</code></td><td class="arrow">→</td><td><span class="kind web">web-result</span></td><td>can be enriched with quote callouts</td></tr>
-        <tr><td><code>Task</code> (subagent)</td><td class="arrow">→</td><td><span class="kind">subagent</span></td><td>recursive — inner stack runs the same pipeline</td></tr>
-        <tr><td>everything else</td><td class="arrow">→</td><td><span class="kind">note</span></td><td>placeholder until the interface agent shapes it</td></tr>
+        <tr>
+          <td><b>1 · prefilter</b></td>
+          <td>buffer + activity</td>
+          <td>updates the indicator; auto-commits only for: <code>TodoWrite</code> (plan), explicit long-running <code>Bash</code>, things the user has opted to follow</td>
+        </tr>
+        <tr>
+          <td><b>2 · interface agent</b></td>
+          <td>editorial pass</td>
+          <td>runs each settled chunk; outputs an <code>activity</code> update <i>or</i> 0+ committed components; can replace / enrich / insert</td>
+        </tr>
+        <tr>
+          <td><b>3 · explicit MCP</b></td>
+          <td>self-authored UI</td>
+          <td>main agent calls <code>render_*</code> when it knows the structure (rare; bypasses editorial pass)</td>
+        </tr>
       </tbody>
     </table>
   </div>
 
-  <h3 id="iface-agent">Layer 2 · interface agent (smart)</h3>
-  <p>
-    A second, smaller model (Haiku 4.5) runs in parallel. Its system
-    prompt holds the <b>component vocabulary</b> — a versioned schema of
-    every component type the page can render, plus when-to-use guidance.
-    It receives a settled chunk of events and outputs descriptors. It
-    can <b>replace</b>, <b>enrich</b>, or <b>insert</b> components on
-    top of the prefilter's baseline.
-  </p>
+  <h3 style="margin-top: 22px;">What it looks like in practice</h3>
+  <div class="event-sample" style="white-space: pre-wrap;"><span class="c">// incoming: a Read call exploring a file</span>
+{ kind: <span class="v">"tool_use"</span>, tool: <span class="v">"Read"</span>, input: { file_path: <span class="v">"src/charge.ts"</span> } }
+{ kind: <span class="v">"tool_result"</span>, text: <span class="v">"…"</span> }
 
-  <div class="callout">
-    <b>The unlock.</b> The main agent doesn't have to pick its own UI.
-    It writes prose, calls tools, returns answers. The interface agent
-    shapes that output into something the user can interact with —
-    turning "here are 3 options, which do you prefer?" prose into a
-    clickable <code>decision</code> card with no extra effort from the
-    main agent.
-  </div>
+<span class="c">// interface agent's editorial pass:</span>
+{ activity: { name: <span class="v">"Looking at charge.ts"</span>, metric: <span class="v">"3 of 14"</span> } }
+<span class="c">// ↑ no committed component. just updates the indicator.</span>
 
-  <h4 style="margin-top: 14px; font-size: 13px; color: var(--fg-dim);">Three things the interface agent does</h4>
-  <div class="legend">
-    <div class="item">
-      <div class="ic" style="color: var(--accent);">↺</div>
-      <div><div class="nm">replace</div><div class="ds">"that terminal output is JSON — render as a tree instead of pre"</div></div>
-    </div>
-    <div class="item">
-      <div class="ic" style="color: var(--green);">+</div>
-      <div><div class="nm">enrich</div><div class="ds">"these numbers in the tool result deserve a sparkline beside them"</div></div>
-    </div>
-    <div class="item">
-      <div class="ic" style="color: var(--purple);">★</div>
-      <div><div class="nm">insert</div><div class="ds">"this prose offers 3 options — synthesize a decision card"</div></div>
-    </div>
-  </div>
+
+<span class="c">// incoming: the diff that fixes the bug</span>
+{ kind: <span class="v">"tool_use"</span>, tool: <span class="v">"Edit"</span>, input: { old, new } }
+{ kind: <span class="v">"tool_result"</span>, text: <span class="v">"ok"</span> }
+
+<span class="c">// interface agent's editorial pass:</span>
+[ { type: <span class="v">"diff"</span>, props: { filename, hunks } } ]
+<span class="c">// ↑ deliverable. commits it. activity indicator clears.</span>
+
+
+<span class="c">// incoming: prose offering 3 options</span>
+{ kind: <span class="v">"text"</span>, text: <span class="v">"There are 3 reasonable ways..."</span> }
+
+<span class="c">// interface agent's editorial pass:</span>
+[ { type: <span class="v">"decision"</span>, props: { question, options[] } } ]
+<span class="c">// ↑ decision point. commits a decision card.</span></div>
 
   <h4 style="margin-top: 18px; font-size: 13px; color: var(--fg-dim);">An example</h4>
   <div class="event-sample" style="white-space: pre-wrap;"><span class="c">// the main agent writes prose:</span>

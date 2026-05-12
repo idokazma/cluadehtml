@@ -67,6 +67,20 @@ from numbers in a tool result, diagrams from explanation text — never
 correspond to a tool call at all; they emerge from text the main agent
 wrote naturally.
 
+**The interface agent is an editor, not a transcriber.** Not every
+event the main agent fires deserves a component. A session that reads
+twenty files to debug one line should surface *that line and its fix*
+— not twenty file viewers. The first question the interface agent
+asks of every event isn't *"what component is this?"* but *"does this
+earn a place on the page?"* Most internal tool calls — exploratory
+reads, scratch greps, intermediate bash commands — roll up into a
+single live **activity indicator** (one component that updates as the
+agent works). Only deliverables, decisions, state changes, summaries,
+and things the user explicitly asked to see graduate into committed
+components. The session is a narration, not a log. The user can
+always expand the activity indicator to see the underlying steps —
+but the default is silence on noise and clarity on what matters.
+
 **The page is bidirectional.** A component is not display-only. When
 the user clicks an option on a decision card, drags a slider, picks a
 design tile, or right-clicks to ask about a specific block, that
