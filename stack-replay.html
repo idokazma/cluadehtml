@@ -1,0 +1,757 @@
+<!doctype html>
+<!--
+  stack — faithful in-browser demo.
+
+  This page runs the ACTUAL stack pipeline (normalize + prefilter +
+  interface-agent rules + page renderers) against the ACTUAL fixture
+  (habits-day1.jsonl), entirely in-browser. No server, no network.
+
+  The code below is the same code as stack/src/*.mjs and stack/page/*.js,
+  inlined so this file is self-contained. What you see here is exactly
+  what `node bin/stack.mjs run --replay fixtures/habits-day1.jsonl` shows.
+
+  The previous demo.html was an aspirational mockup with many components
+  per turn. This one is honest: editorial judgment is on, so most events
+  fold into the activity indicator and only ~7-8 components earn the
+  surface.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>stack — faithful demo (real pipeline + real fixture)</title>
+<style>
+  :root {
+    --bg: #0e0f12;
+    --bg-2: #15171c;
+    --bg-3: #1c1f26;
+    --bg-4: #232730;
+    --line: #262a33;
+    --line-2: #333845;
+    --fg: #e6e7ea;
+    --fg-dim: #9097a3;
+    --fg-mute: #5b6272;
+    --accent: #d97757;
+    --accent-soft: #d9775722;
+    --green: #5fb87a;
+    --red: #e26a6a;
+    --yellow: #d6b14a;
+    --blue: #6b9fff;
+    --purple: #a78bfa;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: var(--sans); font-size: 14px;
+    display: grid; grid-template-rows: auto auto 1fr auto auto auto; height: 100vh; overflow: hidden;
+  }
+
+  header {
+    border-bottom: 1px solid var(--line); padding: 10px 18px;
+    display: flex; align-items: center; gap: 12px; background: var(--bg-2);
+  }
+  .logo { width: 22px; height: 22px; border-radius: 5px; background: var(--accent);
+    display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; }
+  .title { font-weight: 600; }
+  .sub { color: var(--fg-dim); font-size: 12px; }
+  .spacer { flex: 1; }
+  .pill { font-size: 11px; padding: 3px 8px; border-radius: 999px;
+    background: var(--bg-3); color: var(--fg-dim); border: 1px solid var(--line); }
+  .pill.live { color: var(--green); border-color: #2c4a36; background: #16241c; }
+  .pill.live::before { content: ""; display: inline-block; width: 6px; height: 6px;
+    background: var(--green); border-radius: 50%; margin-right: 6px; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 #5fb87a88; } 70% { box-shadow: 0 0 0 8px #5fb87a00; } 100% { box-shadow: 0 0 0 0 #5fb87a00; } }
+
+  .banner {
+    background: linear-gradient(135deg, var(--accent-soft), transparent 60%);
+    border-bottom: 1px solid #4a3024;
+    padding: 10px 18px; color: var(--fg-dim); font-size: 12.5px; line-height: 1.5;
+    display: flex; gap: 14px; align-items: center;
+  }
+  .banner b { color: var(--fg); }
+  .banner code { font-family: var(--mono); font-size: 11.5px; background: var(--bg-3); padding: 1px 5px; border-radius: 3px; color: var(--fg); }
+  .banner button {
+    margin-left: auto; background: var(--accent); color: #fff; border: 0;
+    padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+  }
+
+  main { overflow-y: auto; padding: 18px 20px 16px; scroll-behavior: smooth; }
+  .stream { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+
+  .component {
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+    animation: component-in 520ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  .component:hover { border-color: var(--line-2); }
+  @keyframes component-in {
+    0% { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(2px); }
+    60% { opacity: 1; filter: blur(0); }
+    100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  }
+  .c-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(to bottom, var(--bg-3), var(--bg-2));
+    font-size: 12px; color: var(--fg-dim);
+  }
+  .c-head .icon { font-size: 14px; }
+  .c-head .kind {
+    font-family: var(--mono); font-size: 10.5px; padding: 1px 6px;
+    border-radius: 3px; background: var(--bg-4); color: var(--fg-dim);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .c-head .name { color: var(--fg); font-weight: 500; }
+  .c-head .meta { margin-left: auto; color: var(--fg-mute); font-size: 11px; font-family: var(--mono); }
+  .c-body { padding: 12px 14px; }
+
+  /* prompt */
+  .prompt {
+    align-self: flex-end; max-width: 70%;
+    background: var(--bg-3); border: 1px solid var(--line-2);
+    border-radius: 12px 12px 4px 12px;
+    padding: 9px 13px; font-size: 13.5px; line-height: 1.45; color: var(--fg);
+    animation: prompt-in 380ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  .prompt .who { font-size: 10.5px; color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+  @keyframes prompt-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+
+  /* plan */
+  .plan ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 3px; }
+  .plan li { display: flex; align-items: center; gap: 10px; padding: 7px 9px; border-radius: 6px; cursor: pointer;
+    transition: background 180ms ease, color 240ms ease; }
+  .plan li:hover { background: var(--bg-3); }
+  .plan li.done { color: var(--fg-mute); text-decoration: line-through; }
+  .plan li.active { background: var(--bg-3); }
+  .plan .check {
+    width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--line-2);
+    flex-shrink: 0; display: grid; place-items: center;
+    transition: 220ms cubic-bezier(.2,.8,.2,1);
+  }
+  .plan li.done .check { background: var(--green); border-color: var(--green); transform: scale(1.08); }
+  .plan li.done .check::after { content: "✓"; color: white; font-size: 10px; line-height: 1; }
+  .plan li.active .check { border-color: var(--accent); }
+  .plan li.active .check::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite; }
+
+  /* diff */
+  .diff { font-family: var(--mono); font-size: 12.5px; line-height: 1.55; padding: 4px 0; }
+  .diff .row { display: flex; padding: 0 12px; white-space: pre; }
+  .diff .gutter { color: var(--fg-mute); width: 32px; text-align: right; padding-right: 10px; user-select: none; }
+  .diff .add { background: #16321f; }
+  .diff .add::before { content: "+"; color: #6fb787; width: 14px; display: inline-block; }
+  .diff .del { background: #3a1c1c; }
+  .diff .del::before { content: "−"; color: #d97070; width: 14px; display: inline-block; }
+  .diff .ctx { color: var(--fg-dim); }
+  .diff .ctx::before { content: " "; width: 14px; display: inline-block; }
+
+  /* terminal */
+  .term {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+    background: #08090b; color: #cdd1d8; padding: 10px 12px; margin: 0;
+    max-height: 240px; overflow-y: auto; white-space: pre-wrap;
+  }
+  .term .line { display: block; animation: line-in 320ms cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes line-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* decision */
+  .decision { background: linear-gradient(to bottom, #2a1f12, var(--bg-2)); border-color: #4a3a26; }
+  .decision .c-head { background: #2a1f12; border-color: #4a3a26; color: #e8c997; }
+  .decision .opts { display: flex; flex-direction: column; gap: 6px; }
+  .decision .opt {
+    padding: 9px 12px; border: 1px solid var(--line-2); border-radius: 7px;
+    cursor: pointer; transition: 160ms;
+  }
+  .decision .opt:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateX(2px); }
+  .decision .opt.picked { border-color: var(--green); background: #16241c; cursor: default; }
+  .decision .opt.picked::after { content: "✓ picked"; float: right; color: var(--green); font-size: 11px; font-weight: 600; }
+  .decision .opt-label { font-weight: 500; }
+  .decision .opt-desc { color: var(--fg-dim); font-size: 12px; margin-top: 2px; }
+
+  /* note */
+  .note { font-size: 13px; color: var(--fg-dim); line-height: 1.55; padding: 9px 14px;
+    animation: note-in 380ms cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes note-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* activity indicator */
+  .activity {
+    border-top: 1px solid var(--line); background: var(--bg-2);
+    padding: 6px 18px; display: flex; align-items: center; gap: 10px;
+    font-size: 12.5px; color: var(--fg-dim);
+  }
+  .activity .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite; }
+  .activity .name { color: var(--fg); }
+  .activity .metric { margin-left: auto; color: var(--fg-mute); font-family: var(--mono); font-size: 11px; }
+  .activity .expand { background: transparent; border: 0; color: var(--fg-mute); cursor: pointer; padding: 2px 6px; }
+  .activity .expand:hover { color: var(--fg); }
+  .activity-drawer {
+    background: var(--bg-2); border-top: 1px solid var(--line);
+    padding: 6px 18px 8px; font-family: var(--mono); font-size: 12px; color: var(--fg-dim);
+    max-height: 140px; overflow-y: auto;
+  }
+  .activity-drawer .item { display: flex; gap: 8px; padding: 2px 0; }
+  .activity-drawer .item .s { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); margin-top: 6px; flex-shrink: 0; }
+  .activity-drawer .item.done .s { background: var(--green); }
+  .activity-drawer .item.running .s { background: var(--accent); animation: pulse 1.6s infinite; }
+  .activity-drawer .item .m { margin-left: auto; color: var(--fg-mute); font-size: 11px; }
+
+  /* input bar (decorative — interactions still POST to nothing) */
+  .input-bar { border-top: 1px solid var(--line); background: var(--bg-2); padding: 10px 18px 12px; }
+  .input-wrap {
+    max-width: 920px; margin: 0 auto;
+    display: flex; align-items: flex-end; gap: 8px;
+    background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 10px;
+    padding: 8px 10px;
+  }
+  .input-wrap:focus-within { border-color: var(--accent); }
+  .input-wrap textarea {
+    flex: 1; background: transparent; border: 0; outline: 0; resize: none;
+    color: var(--fg); font-family: var(--sans); font-size: 14px;
+    min-height: 22px; max-height: 140px;
+  }
+  .send-btn { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+    padding: 6px 12px; font-weight: 600; cursor: pointer; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">C</div>
+  <div>
+    <div class="title">stack — faithful demo <span class="sub">(real pipeline · real fixture)</span></div>
+  </div>
+  <div class="spacer"></div>
+  <span class="pill" id="counter">0 committed · 0 activity</span>
+  <span class="pill live" id="status">replaying</span>
+</header>
+
+<div class="banner">
+  <div>
+    This page runs the <b>actual stack pipeline</b> (the same code as
+    <code>stack/src/pipeline/*.mjs</code>) against the <b>actual fixture</b>
+    (<code>stack/fixtures/habits-day1.jsonl</code>), entirely in-browser.
+    Watch how editorial judgment thins ~22 raw events down to a small
+    handful of committed components — the rest fold into the activity
+    indicator below.
+  </div>
+  <button id="restart">Restart</button>
+</div>
+
+<main id="main"><div class="stream" id="stream"></div></main>
+
+<div class="activity" id="activity" hidden>
+  <div class="dot"></div>
+  <div class="name" id="activity-name">Idle</div>
+  <div class="metric" id="activity-metric"></div>
+  <button class="expand" id="activity-expand" title="Expand underlying tool calls">▾</button>
+</div>
+<div class="activity-drawer" id="activity-drawer" hidden></div>
+
+<div class="input-bar">
+  <div class="input-wrap">
+    <textarea id="composer" placeholder="(In the real wrapper, this POSTs to /api/prompt. Here it's a no-op.)" rows="1" disabled></textarea>
+    <button class="send-btn" disabled>Send</button>
+  </div>
+</div>
+
+<script type="module">
+/* ============================================================
+   FIXTURE — verbatim from stack/fixtures/habits-day1.jsonl
+   ============================================================ */
+const FIXTURE = [
+  {"_pace":200,"type":"system","subtype":"init","session_id":"replay-001"},
+  {"_pace":600,"type":"user","message":{"content":[{"type":"text","text":"I want to build a habit tracker web app. React + something local for storage. Help me plan it."}]}},
+  {"_pace":900,"type":"assistant","message":{"content":[{"type":"text","text":"I'll plan the work as a checklist and then start on the storage layer."}]}},
+  {"_pace":500,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_plan_1","name":"TodoWrite","input":{"todos":[{"content":"Pick storage layer","status":"in_progress"},{"content":"Sketch 3 home-screen directions","status":"pending"},{"content":"Define data model & schema","status":"pending"},{"content":"Build HabitCard component","status":"pending"},{"content":"Add streak counter with animation","status":"pending"},{"content":"Run tests and iterate","status":"pending"}]}}]}},
+  {"_pace":300,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_plan_1","content":"ok"}]}},
+  {"_pace":900,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_grep_1","name":"Grep","input":{"pattern":"localStorage|IndexedDB|Dexie","path":"."}}]}},
+  {"_pace":700,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_grep_1","content":"(no existing references — this is a greenfield project)"}]}},
+  {"_pace":900,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_read_1","name":"Read","input":{"file_path":"package.json"}}]}},
+  {"_pace":500,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_read_1","content":"{\"name\":\"habits\",\"version\":\"0.0.0\"}"}]}},
+  {"_pace":900,"type":"assistant","message":{"content":[{"type":"text","text":"For storage I have three reasonable options:\n1) localStorage — trivial setup, ~5 MB cap, not queryable, fine for a v0.\n2) IndexedDB (via Dexie) — small lib, GBs capacity, full query support, supports migrations. Best balance for a habit tracker.\n3) SQLite-wasm — full SQL, GBs, but heavy bundle and overkill for our shape.\n\nWhich do you prefer?"}]}},
+  {"_pace":2400,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_write_1","name":"Write","input":{"file_path":"src/db/schema.ts","content":"import Dexie, { Table } from 'dexie';\n\nexport interface Habit { id: string; name: string; createdAt: number }\nexport interface CheckIn { id: string; habitId: string; date: string }\n\nexport class HabitsDB extends Dexie {\n  habits!: Table<Habit, string>;\n  checkIns!: Table<CheckIn, string>;\n\n  constructor() {\n    super('habits');\n    this.version(1).stores({\n      habits: 'id, name, createdAt',\n      checkIns: 'id, habitId, date',\n    });\n  }\n}\n\nexport const db = new HabitsDB();"}}]}},
+  {"_pace":400,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_write_1","content":"wrote 21 lines"}]}},
+  {"_pace":700,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_plan_2","name":"TodoWrite","input":{"todos":[{"content":"Pick storage layer","status":"completed"},{"content":"Sketch 3 home-screen directions","status":"pending"},{"content":"Define data model & schema","status":"completed"},{"content":"Build HabitCard component","status":"in_progress"},{"content":"Add streak counter with animation","status":"pending"},{"content":"Run tests and iterate","status":"pending"}]}}]}},
+  {"_pace":300,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_plan_2","content":"ok"}]}},
+  {"_pace":900,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_write_2","name":"Write","input":{"file_path":"src/components/HabitCard.tsx","content":"import { useState } from 'react';\nimport { useHabit } from '../hooks/useHabit';\n\nexport function HabitCard({ habitId }: { habitId: string }) {\n  const { habit, streak, checkIn } = useHabit(habitId);\n  const [bumped, setBumped] = useState(false);\n\n  return (\n    <div className=\"habit-card\">\n      <div className=\"name\">{habit.name}</div>\n      <div className={`streak ${bumped ? 'bumped' : ''}`}>\n        {streak.current} day streak\n      </div>\n      <button onClick={async () => { await checkIn(); setBumped(true); }}>\n        I did it today\n      </button>\n    </div>\n  );\n}"}}]}},
+  {"_pace":600,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_write_2","content":"wrote 17 lines"}]}},
+  {"_pace":600,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_bash_1","name":"Bash","input":{"command":"npm test --silent"}}]}},
+  {"_pace":900,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_bash_1","content":"Test Files  2 passed (2)\nTests       7 passed (7)\nDuration    412ms"}]}},
+  {"_pace":700,"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu_plan_3","name":"TodoWrite","input":{"todos":[{"content":"Pick storage layer","status":"completed"},{"content":"Sketch 3 home-screen directions","status":"pending"},{"content":"Define data model & schema","status":"completed"},{"content":"Build HabitCard component","status":"completed"},{"content":"Add streak counter with animation","status":"in_progress"},{"content":"Run tests and iterate","status":"pending"}]}}]}},
+  {"_pace":300,"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tu_plan_3","content":"ok"}]}},
+  {"_pace":900,"type":"assistant","message":{"content":[{"type":"text","text":"Done for now — schema, HabitCard, and tests are green. Pick a storage answer above and I'll continue with the streak animation."}]}},
+  {"_pace":300,"type":"result","subtype":"success","session_id":"replay-001"},
+];
+
+/* ============================================================
+   normalize.mjs — verbatim from stack/src/ingest/normalize.mjs
+   ============================================================ */
+function normalize(raw) {
+  if (!raw || typeof raw !== "object") return [];
+  const ts = Date.now();
+  if (raw.type === "system") return [{ kind: "system", raw, ts, session_id: raw.session_id }];
+  if (raw.type === "result") return [{ kind: "result", raw, ts }];
+  if (raw.type === "user") {
+    const content = raw.message?.content || [];
+    const out = [];
+    for (const block of content) {
+      if (typeof block === "string") out.push({ kind: "user", text: block, ts, raw });
+      else if (block?.type === "text") out.push({ kind: "user", text: block.text, ts, raw });
+      else if (block?.type === "tool_result") {
+        out.push({ kind: "tool_result", tool_use_id: block.tool_use_id, content: extractToolResult(block.content), ts, raw });
+      }
+    }
+    return out;
+  }
+  if (raw.type === "assistant") {
+    const content = raw.message?.content || [];
+    const out = [];
+    for (const block of content) {
+      if (block?.type === "text") out.push({ kind: "assistant", text: block.text, ts, raw });
+      else if (block?.type === "tool_use") {
+        out.push({ kind: "assistant", tool_use_id: block.id, tool: block.name, input: block.input || {}, ts, raw });
+      }
+    }
+    return out;
+  }
+  if (raw.type === "stream_event" && raw.event) return normalize({ type: raw.event.type, ...raw.event });
+  return [{ kind: "unknown", raw, ts }];
+}
+function extractToolResult(content) {
+  if (content == null) return "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.map(c => (typeof c === "string" ? c : c?.text || JSON.stringify(c))).join("\n");
+  return JSON.stringify(content);
+}
+
+/* ============================================================
+   ids.mjs — verbatim from stack/src/store/ids.mjs
+   ============================================================ */
+let _idCounter = 1;
+function newId(prefix = "c") { return `${prefix}-${_idCounter++}`; }
+function resetIds() { _idCounter = 1; }
+
+/* ============================================================
+   prefilter.mjs — verbatim from stack/src/pipeline/prefilter.mjs
+   ============================================================ */
+const TOOL_NAMES = {
+  Read:      { activity: (e) => `Reading ${shortPath(e.input?.file_path)}` },
+  Edit:      { activity: (e) => `Editing ${shortPath(e.input?.file_path)}` },
+  Write:     { activity: (e) => `Writing ${shortPath(e.input?.file_path)}` },
+  Bash:      { activity: (e) => `Running: ${truncate(e.input?.command, 60)}` },
+  Grep:      { activity: (e) => `Searching for "${truncate(e.input?.pattern, 30)}"` },
+  Glob:      { activity: (e) => `Listing ${e.input?.pattern || ""}` },
+  WebFetch:  { activity: (e) => `Fetching ${shortHost(e.input?.url)}` },
+  WebSearch: { activity: (e) => `Searching the web: "${truncate(e.input?.query, 30)}"` },
+  Task:      { activity: (e) => `Delegating: ${truncate(e.input?.description, 40)}` },
+};
+
+function prefilter(ev, state) {
+  const out = [];
+  state.recent ??= [];
+  state.activeTools ??= new Map();
+
+  if (ev.kind === "user") {
+    out.push({ op: "append", component: { id: newId("user"), type: "prompt", props: { text: ev.text || "" } }, ts: ev.ts });
+    return out;
+  }
+  if (ev.kind === "assistant" && ev.text) {
+    out.push({ op: "activity", state: { name: "Drafting reply…", status: "running", recent: state.recent.slice(-5) }, ts: ev.ts });
+    return out;
+  }
+  if (ev.kind === "assistant" && ev.tool) {
+    const spec = TOOL_NAMES[ev.tool];
+    const activityName = spec ? spec.activity(ev) : `${ev.tool}(…)`;
+    state.activeTools.set(ev.tool_use_id, { name: ev.tool, activityName, startedAt: ev.ts });
+
+    if (ev.tool === "TodoWrite") {
+      const items = (ev.input?.todos || []).map(t => ({
+        label: t.content, done: t.status === "completed", active: t.status === "in_progress",
+      }));
+      const planId = state.planComponentId || newId("plan");
+      if (state.planComponentId) {
+        out.push({ op: "patch", id: planId, props: { title: "Plan", items }, ts: ev.ts });
+      } else {
+        state.planComponentId = planId;
+        out.push({ op: "append", component: { id: planId, type: "plan", props: { title: "Plan", items } }, ts: ev.ts });
+      }
+      return out;
+    }
+
+    pushRecent(state.recent, { name: activityName, status: "running" });
+    out.push({ op: "activity", state: { name: activityName, status: "running", recent: state.recent.slice(-5) }, ts: ev.ts });
+    return out;
+  }
+  if (ev.kind === "tool_result") {
+    const t = state.activeTools.get(ev.tool_use_id);
+    if (t) {
+      const dur = ev.ts - t.startedAt;
+      const last = state.recent[state.recent.length - 1];
+      if (last) { last.status = "done"; last.metric = formatDuration(dur); }
+      state.activeTools.delete(ev.tool_use_id);
+      out.push({ op: "activity", state: { name: t.activityName, status: "running", recent: state.recent.slice(-5) }, ts: ev.ts });
+    }
+    state.lastResults ??= [];
+    state.lastResults.push({ tool: t?.name, content: ev.content, tool_use_id: ev.tool_use_id, ts: ev.ts });
+    if (state.lastResults.length > 32) state.lastResults.shift();
+    return out;
+  }
+  if (ev.kind === "result") {
+    out.push({ op: "activity", state: { name: "Idle", status: "idle", recent: state.recent.slice(-5) }, ts: ev.ts });
+    return out;
+  }
+  return out;
+}
+function pushRecent(r, e) { r.push(e); if (r.length > 32) r.shift(); }
+function shortPath(p) { if (!p) return "(file)"; const parts = p.split("/"); return parts.length <= 3 ? p : ".../" + parts.slice(-3).join("/"); }
+function shortHost(u) { try { return new URL(u).host; } catch { return u || "(url)"; } }
+function truncate(s, n) { if (!s) return ""; s = String(s); return s.length > n ? s.slice(0, n) + "…" : s; }
+function formatDuration(ms) { if (ms < 1000) return ms + "ms"; return (ms / 1000).toFixed(1) + "s"; }
+
+/* ============================================================
+   interface-agent.mjs (rules) — verbatim from stack/src/pipeline/interface-agent.mjs
+   ============================================================ */
+function editorialAgentRules(chunk, state) {
+  const out = [];
+  for (const ev of chunk) {
+    if (ev.kind === "assistant" && (ev.tool === "Edit" || ev.tool === "Write")) {
+      const i = ev.input || {};
+      const hunks = synthDiffFromEdit(i, ev.tool);
+      out.push({ op: "append", component: { id: newId("diff"), type: "diff",
+        props: { filename: i.file_path || "(unknown)", hunks, tool: ev.tool } }, ts: ev.ts });
+      continue;
+    }
+    if (ev.kind === "assistant" && ev.text) {
+      const dec = sniffDecision(ev.text);
+      if (dec) {
+        out.push({ op: "append", component: { id: newId("dec"), type: "decision",
+          props: { question: dec.question, options: dec.options } }, ts: ev.ts });
+        continue;
+      }
+    }
+    if (ev.kind === "assistant" && ev.tool === "Bash") {
+      const cmd = ev.input?.command || "";
+      if (/(?:npm|pnpm|yarn) (?:run|test|build|ci)|jest|vitest|pytest|docker|deploy|migrate|tsc/.test(cmd)) {
+        out.push({ op: "append", component: { id: terminalIdFor(ev.tool_use_id), type: "terminal",
+          props: { command: cmd, lines: [], status: "running" } }, ts: ev.ts });
+        continue;
+      }
+    }
+    if (ev.kind === "tool_result") {
+      const id = terminalIdFor(ev.tool_use_id);
+      if (state._committedTerminals?.has(id)) {
+        const text = typeof ev.content === "string" ? ev.content : JSON.stringify(ev.content);
+        out.push({ op: "stream", id, append: text, ts: ev.ts });
+        out.push({ op: "finalize", id, meta: {}, ts: ev.ts });
+        continue;
+      }
+    }
+    if (ev.kind === "assistant" && ev.text && shouldKeepNote(ev.text)) {
+      out.push({ op: "append", component: { id: newId("note"), type: "note", props: { text: ev.text } }, ts: ev.ts });
+    }
+  }
+  state._committedTerminals ??= new Set();
+  for (const m of out) {
+    if (m.op === "append" && m.component.type === "terminal") state._committedTerminals.add(m.component.id);
+  }
+  return out;
+}
+function terminalIdFor(toolUseId) { return `term-${toolUseId || "x"}`; }
+function sniffDecision(text) {
+  const numbered = [...text.matchAll(/(?:^|\n)\s*(?:(?:\d+)[.)]|Option\s+\d+:)\s+(.+?)(?=\n\s*(?:\d+)[.)]|\n\s*Option\s+\d+:|\n\s*$|$)/gs)];
+  if (numbered.length < 2) return null;
+  const askMatch = text.match(/([A-Z][^.?!\n]{8,160}\?)/);
+  if (!askMatch && !/which (?:one|do you|of these|approach|option)/i.test(text)) return null;
+  return {
+    question: askMatch ? askMatch[1].trim() : "Which option do you prefer?",
+    options: numbered.map(m => {
+      const raw = m[1].trim().split(/[—–:-]\s+|\n/);
+      return { label: raw[0].trim().slice(0, 80), desc: (raw.slice(1).join(" — ") || raw[0]).slice(0, 200) };
+    }),
+  };
+}
+function shouldKeepNote(text) {
+  if (!text) return false;
+  if (text.length > 600) return false;
+  if (/^(here's|here is|done|fixed|shipped|all green|migrating|i'll|let me)/i.test(text.trim())) return true;
+  return /^[•✓\-\*]\s|summary|to recap|tl;dr|in short|next:/i.test(text);
+}
+function synthDiffFromEdit(input, tool) {
+  if (tool === "Write" && input.content) {
+    return [{ startLine: 1, lines: input.content.split("\n").map(l => ["+", l]) }];
+  }
+  if (tool === "Edit" && input.old_string != null && input.new_string != null) {
+    const olds = String(input.old_string).split("\n").map(l => ["-", l]);
+    const news = String(input.new_string).split("\n").map(l => ["+", l]);
+    return [{ startLine: 1, lines: [...olds, ...news] }];
+  }
+  return [{ startLine: 1, lines: [[" ", JSON.stringify(input).slice(0, 200)]] }];
+}
+
+/* ============================================================
+   synthesize.mjs — verbatim from stack/src/server/synthesize.mjs
+   ============================================================ */
+function synthesizeUserMessage(action, components) {
+  const comp = components.get(action.id);
+  const ref = `@${action.id}`;
+  switch (action.kind) {
+    case "pick": {
+      const opt = action.payload?.option;
+      const label = action.payload?.label || `option ${opt}`;
+      const desc = action.payload?.desc ? ` — ${action.payload.desc}` : "";
+      return `[interaction with ${ref}]\nPicked ${label}${desc}.`;
+    }
+    case "apply": {
+      const params = action.payload?.params || {};
+      return `[interaction with ${ref}]\nApply these settings:\n${Object.entries(params).map(([k, v]) => `  - ${k}: ${JSON.stringify(v)}`).join("\n")}`;
+    }
+    case "toggle": {
+      const step = action.payload?.step;
+      const done = action.payload?.done;
+      return `[interaction with ${ref}]\nThe user marked step ${step} as ${done ? "done" : "not done"}.`;
+    }
+    case "revert": return `[interaction with ${ref}]\nThe user requested reverting this change.`;
+    case "edit": {
+      const code = action.payload?.new_code || "";
+      const file = action.payload?.file || (comp?.props?.filename) || "(file)";
+      return `[reference: ${ref} (${file})]\nUse this version instead:\n\`\`\`\n${code}\n\`\`\``;
+    }
+    case "ask": return `[reference: ${ref}]\n${action.payload?.text || ""}`;
+    default: return `[interaction with ${ref}]\nAction: ${action.kind}`;
+  }
+}
+
+/* ============================================================
+   Page renderers — adapted from stack/page/session.js
+   ============================================================ */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const el = (tag, attrs = {}, ...children) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") n.className = v;
+    else if (k === "html") n.innerHTML = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) n.setAttribute(k, v);
+  }
+  for (const c of children.flat()) { if (c == null || c === false) continue; n.append(c.nodeType ? c : document.createTextNode(c)); }
+  return n;
+};
+const components = new Map();
+const stream = $("#stream");
+const counterEl = $("#counter");
+let activityCount = 0;
+let commitCount = 0;
+
+function header(icon, kind, name, meta) {
+  return el("div", { class: "c-head" },
+    el("span", { class: "icon" }, icon),
+    el("span", { class: "kind" }, kind),
+    el("span", { class: "name" }, name),
+    el("span", { class: "meta" }, meta || ""),
+  );
+}
+const renderers = {
+  prompt: {
+    mount: (c) => el("div", { class: "prompt" }, el("div", { class: "who" }, "you"), el("div", null, c.props.text || "")),
+  },
+  note: {
+    mount: (c) => el("div", { class: "component" }, header("✦", "note", "claude"), el("div", { class: "note" }, c.props.text || "")),
+  },
+  plan: {
+    mount: (c) => {
+      const dom = el("div", { class: "component plan" },
+        header("📋", "plan", c.props.title || "Plan", `${(c.props.items || []).filter(i => i.done).length} / ${(c.props.items || []).length}`),
+        el("div", { class: "c-body" }, el("ul")),
+      );
+      planFill(dom, c);
+      return dom;
+    },
+    update: (dom, c) => planFill(dom, c),
+  },
+  diff: {
+    mount: (c) => {
+      const dom = el("div", { class: "component" }, header("✎", "diff", c.props.filename || "(file)"), el("div", { class: "diff" }));
+      diffFill(dom, c);
+      return dom;
+    },
+  },
+  terminal: {
+    mount: (c) => {
+      const dom = el("div", { class: "component" },
+        header("⌘", "terminal", "$ " + (c.props.command || ""), c.props.status === "running" ? "running…" : "done"),
+        el("pre", { class: "term" }),
+      );
+      for (const ln of c.props.lines || []) $(".term", dom).append(el("span", { class: "line" }, ln + "\n"));
+      return dom;
+    },
+    stream: (dom, append) => {
+      const t = $(".term", dom); t.append(el("span", { class: "line" }, append)); t.scrollTop = t.scrollHeight;
+    },
+    finalize: (dom, meta) => { const m = $(".meta", dom); if (m) m.textContent = (meta?.exit != null) ? `exit ${meta.exit}` : "done"; },
+  },
+  decision: {
+    mount: (c) => {
+      const dom = el("div", { class: "component decision" },
+        header("?", "decision", "question for you"),
+        el("div", { class: "c-body" },
+          el("div", { style: "margin-bottom: 10px; color: var(--fg);" }, c.props.question || ""),
+          el("div", { class: "opts" }, ...(c.props.options || []).map((o, i) =>
+            el("div", { class: "opt", onclick: () => pickDecision(c.id, dom, i, o) },
+              el("div", { class: "opt-label" }, o.label || `Option ${i + 1}`),
+              el("div", { class: "opt-desc" }, o.desc || ""),
+            )),
+          ),
+        ),
+      );
+      return dom;
+    },
+  },
+};
+
+function planFill(dom, c) {
+  const ul = $("ul", dom); ul.innerHTML = "";
+  (c.props.items || []).forEach(it => {
+    ul.append(el("li", { class: (it.done ? "done " : "") + (it.active ? "active" : "") },
+      el("span", { class: "check" }), el("span", null, it.label)));
+  });
+  const meta = $(".meta", dom);
+  if (meta) meta.textContent = `${(c.props.items || []).filter(i => i.done).length} / ${(c.props.items || []).length}`;
+}
+function diffFill(dom, c) {
+  const wrap = $(".diff", dom); wrap.innerHTML = "";
+  let line = (c.props.hunks?.[0]?.startLine ?? 1);
+  for (const h of c.props.hunks || []) {
+    for (const [k, t] of h.lines) {
+      const cls = k === "+" ? "add" : k === "-" ? "del" : "ctx";
+      wrap.append(el("div", { class: `row ${cls}` },
+        el("span", { class: "gutter" }, k === "-" ? "" : String(line)), document.createTextNode(t)));
+      if (k !== "-") line++;
+    }
+  }
+}
+
+function apply(m) {
+  if (m.op === "activity") { activityCount++; updateActivity(m.state); updateCounter(); return; }
+  commitCount++; updateCounter();
+  if (m.op === "append") {
+    const c = m.component;
+    const r = renderers[c.type] || fallback;
+    const dom = r.mount(c);
+    components.set(c.id, { ...c, dom });
+    dom.dataset.id = c.id;
+    stream.append(dom);
+    autoscroll();
+    return;
+  }
+  const b = components.get(m.id);
+  if (!b) return;
+  if (m.op === "patch") {
+    b.props = { ...b.props, ...m.props };
+    const r = renderers[b.type];
+    if (r?.update) r.update(b.dom, b);
+    else { const fresh = r.mount(b); b.dom.replaceWith(fresh); b.dom = fresh; }
+  } else if (m.op === "stream") {
+    renderers[b.type]?.stream?.(b.dom, m.append);
+  } else if (m.op === "finalize") {
+    renderers[b.type]?.finalize?.(b.dom, m.meta);
+  }
+}
+const fallback = { mount: (c) => el("div", { class: "component" }, header("?", c.type || "unknown", "(no renderer)"), el("pre", { class: "term" }, JSON.stringify(c.props, null, 2))) };
+
+function updateCounter() {
+  counterEl.textContent = `${commitCount} committed · ${activityCount} activity`;
+}
+
+/* activity */
+const activityEl = $("#activity");
+const activityName = $("#activity-name");
+const activityMetric = $("#activity-metric");
+const activityDrawer = $("#activity-drawer");
+let drawerOpen = false;
+function updateActivity(state) {
+  if (!state) return;
+  activityEl.hidden = false;
+  activityName.textContent = state.name || "";
+  activityMetric.textContent = state.metric || "";
+  if (drawerOpen) renderDrawer(state);
+}
+function renderDrawer(state) {
+  activityDrawer.innerHTML = "";
+  for (const it of (state?.recent || [])) {
+    activityDrawer.append(el("div", { class: "item " + (it.status || "") },
+      el("div", { class: "s" }), el("div", null, it.name), el("div", { class: "m" }, it.metric || ""),
+    ));
+  }
+}
+$("#activity-expand").addEventListener("click", () => {
+  drawerOpen = !drawerOpen;
+  activityDrawer.hidden = !drawerOpen;
+  $("#activity-expand").textContent = drawerOpen ? "▴" : "▾";
+});
+
+/* decision pick (bidirectional — synthesizes a user prompt locally) */
+function pickDecision(id, dom, i, opt) {
+  $$(".opt", dom).forEach((o, idx) => o.classList.toggle("picked", idx === i));
+  const meta = $(".meta", dom); if (meta) meta.textContent = "resolved";
+  const action = { id, kind: "pick", payload: { option: i + 1, label: opt.label, desc: opt.desc } };
+  const msg = synthesizeUserMessage(action, components);
+  // Emit a new prompt component to visualize the round-trip — exactly
+  // what the replay-mode wrapper does.
+  setTimeout(() => {
+    apply({ op: "append", component: { id: newId("user"), type: "prompt", props: { text: msg } }, ts: Date.now() });
+    setTimeout(() => apply({
+      op: "append",
+      component: { id: newId("note"), type: "note", props: { text: "(In live mode this would re-enter claude via --resume -p. Replay mode echoes the synthesized message.)" } },
+      ts: Date.now(),
+    }), 400);
+  }, 300);
+}
+
+/* autoscroll */
+function autoscroll() {
+  const m = $("#main");
+  if (m.scrollHeight - m.scrollTop - m.clientHeight < 240) {
+    requestAnimationFrame(() => m.scrollTo({ top: m.scrollHeight, behavior: "smooth" }));
+  }
+}
+
+/* ============================================================
+   driver — feeds FIXTURE through the pipeline at the original pace
+   ============================================================ */
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function runReplay() {
+  // reset
+  resetIds();
+  stream.innerHTML = "";
+  components.clear();
+  activityCount = 0; commitCount = 0; updateCounter();
+  $("#status").textContent = "replaying";
+  $("#status").classList.add("live");
+
+  const pipelineState = {};
+  for (const raw of FIXTURE) {
+    const pace = raw._pace ?? 350;
+    const clean = { ...raw }; delete clean._pace;
+    for (const ev of normalize(clean)) {
+      const a = prefilter(ev, pipelineState);
+      const b = editorialAgentRules([ev], pipelineState);
+      for (const m of [...a, ...b]) apply(m);
+    }
+    await sleep(pace);
+  }
+  $("#status").textContent = "idle";
+  $("#status").classList.remove("live");
+}
+
+$("#restart").addEventListener("click", runReplay);
+runReplay();
+</script>
+</body>
+</html>

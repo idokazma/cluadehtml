@@ -50,6 +50,16 @@ stacked into a single page that grows as the session goes.
   an inline question with options, search results, file edits. Right-click
   any component to ask claude about it specifically; click `@b-id` pills
   in any reply to scroll to and highlight the referenced component.
+  *Aspirational view — shows many components per turn.*
+
+- **[`stack-replay.html`](./stack-replay.html)** — **faithful demo**, made
+  after the code was written. Runs the **actual stack pipeline** (the
+  same `normalize` + `prefilter` + `editorialAgentRules` from
+  `stack/src/`) against the **actual fixture** (`stack/fixtures/habits-day1.jsonl`),
+  inlined into a single self-contained file. What you see is exactly
+  what `node bin/stack.mjs run --replay …` produces — including the
+  editorial behavior: most of the 22 raw events fold into the activity
+  indicator at the bottom; only ~8 commit as visible components.
 
 - **[`project.html`](./project.html)** — separate exploration of what a
   project landing page might look like (cards for "where you left off",
