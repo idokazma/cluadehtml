@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Claude Code — live session</title>
+<style>
+  :root {
+    --bg: #0e0f12;
+    --bg-2: #15171c;
+    --bg-3: #1c1f26;
+    --line: #262a33;
+    --line-2: #333845;
+    --fg: #e6e7ea;
+    --fg-dim: #9097a3;
+    --fg-mute: #5b6272;
+    --accent: #d97757;       /* claude orange */
+    --accent-soft: #d9775722;
+    --green: #5fb87a;
+    --red: #e26a6a;
+    --yellow: #d6b14a;
+    --blue: #6b9fff;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    font-size: 14px;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 260px 1fr;
+    grid-template-areas:
+      "header header"
+      "side   main"
+      "side   input";
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* --- header --- */
+  header {
+    grid-area: header;
+    border-bottom: 1px solid var(--line);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-2);
+  }
+  .logo {
+    width: 22px; height: 22px; border-radius: 5px;
+    background: var(--accent);
+    display: grid; place-items: center;
+    color: #fff; font-weight: 700; font-size: 13px;
+  }
+  .title { font-weight: 600; }
+  .sub { color: var(--fg-dim); font-size: 12px; }
+  .spacer { flex: 1; }
+  .pill {
+    font-size: 11px; padding: 3px 8px; border-radius: 999px;
+    background: var(--bg-3); color: var(--fg-dim);
+    border: 1px solid var(--line);
+  }
+  .pill.live { color: var(--green); border-color: #2c4a36; background: #16241c; }
+  .pill.live::before {
+    content: ""; display: inline-block; width: 6px; height: 6px;
+    background: var(--green); border-radius: 50%; margin-right: 6px;
+    box-shadow: 0 0 0 0 var(--green);
+    animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 #5fb87a88; }
+    70%  { box-shadow: 0 0 0 8px #5fb87a00; }
+    100% { box-shadow: 0 0 0 0 #5fb87a00; }
+  }
+
+  /* --- sidebar --- */
+  aside {
+    grid-area: side;
+    border-right: 1px solid var(--line);
+    background: var(--bg-2);
+    overflow-y: auto;
+    padding: 14px 12px;
+  }
+  aside h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fg-mute);
+    margin: 14px 6px 6px;
+    font-weight: 600;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    color: var(--fg-dim);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .nav-item:hover { background: var(--bg-3); color: var(--fg); }
+  .nav-item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--fg-mute); }
+  .nav-item .dot.green { background: var(--green); }
+  .nav-item .dot.yellow { background: var(--yellow); }
+  .nav-item .dot.red { background: var(--red); }
+  .nav-item .count { margin-left: auto; color: var(--fg-mute); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+  /* --- main: stream of blocks --- */
+  main {
+    grid-area: main;
+    overflow-y: auto;
+    padding: 18px 28px 80px;
+    scroll-behavior: smooth;
+  }
+  .stream { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+
+  .block {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 120ms, transform 120ms;
+    animation: slidein 220ms ease;
+  }
+  @keyframes slidein {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .block:hover { border-color: var(--line-2); }
+  .block.flash { animation: flash 700ms ease; }
+  @keyframes flash {
+    0%   { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    100% { border-color: var(--line); box-shadow: 0 0 0 0 transparent; }
+  }
+  .block-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--fg-dim);
+    background: linear-gradient(to bottom, var(--bg-3), var(--bg-2));
+  }
+  .block-header .icon { width: 14px; height: 14px; opacity: 0.8; }
+  .block-header .name { color: var(--fg); font-weight: 500; }
+  .block-header .meta { margin-left: auto; color: var(--fg-mute); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .block-body { padding: 12px 14px; }
+
+  /* status colors on header */
+  .block.ok    .block-header .icon { color: var(--green); }
+  .block.warn  .block-header .icon { color: var(--yellow); }
+  .block.err   .block-header .icon { color: var(--red); }
+  .block.run   .block-header .icon { color: var(--blue); }
+
+  /* user/assistant message blocks */
+  .msg.user   { background: var(--bg-3); }
+  .msg.user   .block-header .name { color: var(--accent); }
+  .msg .block-body { line-height: 1.55; }
+
+  /* plan block */
+  .plan ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+  .plan li {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 6px 8px; border-radius: 6px; cursor: pointer;
+    color: var(--fg);
+  }
+  .plan li:hover { background: var(--bg-3); }
+  .plan li.done { color: var(--fg-mute); text-decoration: line-through; }
+  .plan li.active { background: var(--bg-3); }
+  .plan .check {
+    width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--line-2);
+    margin-top: 3px; display: grid; place-items: center; flex-shrink: 0;
+  }
+  .plan li.done .check { background: var(--green); border-color: var(--green); }
+  .plan li.done .check::after { content: "✓"; color: white; font-size: 10px; line-height: 1; }
+  .plan li.active .check { border-color: var(--accent); }
+  .plan li.active .check::after {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); animation: pulse 1.6s infinite;
+  }
+
+  /* file edit block */
+  .diff { font-family: var(--mono); font-size: 12.5px; line-height: 1.55; }
+  .diff .row { display: flex; padding: 0 8px; white-space: pre; }
+  .diff .gutter { color: var(--fg-mute); width: 36px; text-align: right; padding-right: 10px; user-select: none; }
+  .diff .add { background: #16321f; }
+  .diff .add .gutter { color: #6fb787; }
+  .diff .add::before { content: "+"; color: #6fb787; width: 14px; display: inline-block; }
+  .diff .del { background: #3a1c1c; }
+  .diff .del .gutter { color: #d97070; }
+  .diff .del::before { content: "−"; color: #d97070; width: 14px; display: inline-block; }
+  .diff .ctx::before { content: " "; width: 14px; display: inline-block; }
+  .diff .ctx { color: var(--fg-dim); }
+  .file-tabs { display: flex; gap: 6px; padding: 6px 10px 0; border-bottom: 1px solid var(--line); }
+  .file-tab { padding: 5px 10px; border-radius: 6px 6px 0 0; font-family: var(--mono); font-size: 12px; color: var(--fg-dim); cursor: pointer; }
+  .file-tab.active { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-bottom: 1px solid var(--bg); margin-bottom: -1px; }
+
+  /* terminal block */
+  .term {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+    background: #08090b; color: #cdd1d8;
+    padding: 10px 12px; border-radius: 6px;
+    max-height: 220px; overflow-y: auto; white-space: pre-wrap;
+  }
+  .term .ok { color: var(--green); }
+  .term .err { color: var(--red); }
+  .term .dim { color: var(--fg-mute); }
+
+  /* tests block */
+  .tests { display: flex; flex-direction: column; gap: 4px; }
+  .test {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 8px; border-radius: 6px; font-family: var(--mono); font-size: 12.5px;
+  }
+  .test:hover { background: var(--bg-3); }
+  .test .badge {
+    width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center;
+    font-size: 11px; color: white; flex-shrink: 0;
+  }
+  .test.pass .badge { background: var(--green); }
+  .test.fail .badge { background: var(--red); }
+  .test.run  .badge { background: var(--blue); }
+  .test.pend .badge { background: var(--bg-3); border: 1px solid var(--line-2); color: var(--fg-mute); }
+  .test .name { color: var(--fg); }
+  .test .time { margin-left: auto; color: var(--fg-mute); font-size: 11px; }
+  .tests-summary {
+    display: flex; gap: 14px; padding: 8px 4px 0; margin-top: 6px;
+    border-top: 1px dashed var(--line); color: var(--fg-dim); font-size: 12px;
+  }
+  .tests-summary b { color: var(--fg); font-variant-numeric: tabular-nums; }
+
+  /* question block */
+  .question {
+    border-color: #4a3a26;
+    background: linear-gradient(to bottom, #2a1f12, var(--bg-2));
+  }
+  .question .block-header { background: #2a1f12; color: #e8c997; border-color: #4a3a26; }
+  .question .opts { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .question .opt {
+    padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 6px;
+    cursor: pointer; transition: 80ms;
+  }
+  .question .opt:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .question .opt.picked { border-color: var(--green); background: #16241c; }
+  .question .opt-label { font-weight: 500; }
+  .question .opt-desc { color: var(--fg-dim); font-size: 12px; margin-top: 2px; }
+
+  /* search block */
+  .search-results { display: flex; flex-direction: column; gap: 2px; }
+  .search-result {
+    display: flex; gap: 10px; padding: 4px 8px; border-radius: 6px;
+    font-family: var(--mono); font-size: 12px; cursor: pointer;
+  }
+  .search-result:hover { background: var(--bg-3); }
+  .search-result .path { color: var(--blue); }
+  .search-result .ln { color: var(--fg-mute); }
+  .search-result .snip { color: var(--fg-dim); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .search-result .snip mark { background: #4a3a14; color: #f0d484; padding: 0 2px; border-radius: 2px; }
+
+  /* thought block */
+  .thought { background: transparent; border-style: dashed; border-color: var(--line); }
+  .thought .block-header { background: transparent; color: var(--fg-mute); border-bottom-style: dashed; }
+  .thought .block-body { color: var(--fg-dim); font-style: italic; font-size: 13px; }
+
+  /* tool call collapsed */
+  details.tool { border: 1px solid var(--line); border-radius: 6px; background: var(--bg-3); }
+  details.tool summary {
+    cursor: pointer; padding: 6px 10px; font-family: var(--mono); font-size: 12px;
+    color: var(--fg-dim); list-style: none; display: flex; gap: 8px; align-items: center;
+  }
+  details.tool summary::-webkit-details-marker { display: none; }
+  details.tool summary::before { content: "▸"; color: var(--fg-mute); transition: transform 120ms; display: inline-block; }
+  details.tool[open] summary::before { transform: rotate(90deg); }
+  details.tool .body { padding: 10px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; }
+
+  /* input bar */
+  .input-bar {
+    grid-area: input;
+    border-top: 1px solid var(--line);
+    background: var(--bg-2);
+    padding: 12px 28px 14px;
+  }
+  .input-wrap {
+    max-width: 920px; margin: 0 auto;
+    display: flex; align-items: flex-end; gap: 10px;
+    background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 10px;
+    padding: 8px 10px;
+  }
+  .input-wrap:focus-within { border-color: var(--accent); }
+  .input-wrap textarea {
+    flex: 1; background: transparent; border: 0; outline: 0; resize: none;
+    color: var(--fg); font-family: var(--sans); font-size: 14px; min-height: 22px; max-height: 140px;
+  }
+  .send-btn {
+    background: var(--accent); color: white; border: 0; border-radius: 6px;
+    padding: 6px 12px; font-weight: 600; cursor: pointer;
+  }
+  .send-btn:hover { filter: brightness(1.05); }
+
+  /* context menu */
+  .ctx-menu {
+    position: fixed; z-index: 1000;
+    background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 8px;
+    padding: 4px; min-width: 220px;
+    box-shadow: 0 12px 30px #0009;
+    font-size: 13px;
+  }
+  .ctx-menu button {
+    width: 100%; text-align: left; background: none; border: 0; color: var(--fg);
+    padding: 7px 10px; border-radius: 5px; cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .ctx-menu button:hover { background: var(--bg-3); }
+  .ctx-menu .kbd {
+    margin-left: auto; color: var(--fg-mute); font-family: var(--mono); font-size: 11px;
+  }
+  .ctx-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+  .ctx-menu .danger { color: var(--red); }
+
+  /* highlight a referenced block */
+  .block.referenced {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  /* small utilities */
+  .row { display: flex; align-items: center; gap: 8px; }
+  code.inline {
+    font-family: var(--mono); font-size: 12.5px;
+    background: var(--bg-3); padding: 1px 5px; border-radius: 4px;
+    color: var(--fg);
+  }
+  .ref {
+    color: var(--accent); font-family: var(--mono); font-size: 12px;
+    cursor: pointer; padding: 1px 5px; border-radius: 4px; background: var(--accent-soft);
+  }
+  .ref:hover { filter: brightness(1.15); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">C</div>
+  <div>
+    <div class="title">claude code <span class="sub">— /home/user/checkout-svc</span></div>
+  </div>
+  <div class="spacer"></div>
+  <span class="pill">claude-opus-4-7</span>
+  <span class="pill live" id="live-pill">working</span>
+</header>
+
+<aside>
+  <h3>Session</h3>
+  <div class="nav-item"><span class="dot green"></span>Plan <span class="count" id="nav-plan">0/0</span></div>
+  <div class="nav-item"><span class="dot yellow"></span>Open questions <span class="count" id="nav-q">0</span></div>
+  <div class="nav-item"><span class="dot green"></span>Tests <span class="count" id="nav-tests">—</span></div>
+  <div class="nav-item"><span class="dot"></span>Files touched <span class="count" id="nav-files">0</span></div>
+
+  <h3>Touched files</h3>
+  <div id="file-list"></div>
+
+  <h3>Jump to</h3>
+  <div class="nav-item" data-jump="plan-1">📋 Implement idempotency keys</div>
+  <div class="nav-item" data-jump="user-1">💬 Original request</div>
+  <div class="nav-item" data-jump="end">⤓ Latest</div>
+</aside>
+
+<main id="main">
+  <div class="stream" id="stream"></div>
+</main>
+
+<div class="input-bar">
+  <div class="input-wrap">
+    <textarea id="composer" placeholder="Reply, or right-click any block above to ask about it..." rows="1"></textarea>
+    <button class="send-btn" id="send">Send</button>
+  </div>
+</div>
+
+<!-- context menu template -->
+<div class="ctx-menu" id="ctx-menu" style="display: none;"></div>
+
+<script>
+/* =========================================================
+   tiny helpers
+   ========================================================= */
+const $  = (sel, el=document) => el.querySelector(sel);
+const $$ = (sel, el=document) => [...el.querySelectorAll(sel)];
+const el = (tag, attrs={}, ...children) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v;
+    else if (k === "html") n.innerHTML = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) n.setAttribute(k, v);
+  }
+  for (const c of children.flat()) {
+    if (c == null || c === false) continue;
+    n.append(c.nodeType ? c : document.createTextNode(c));
+  }
+  return n;
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const now   = () => {
+  const d = new Date();
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+};
+
+/* =========================================================
+   block registry — every block has an id; can be looked up + mutated
+   ========================================================= */
+const blocks = new Map();   // id -> { dom, type, data }
+let nextId = 1;
+const newId = (prefix="b") => `${prefix}-${nextId++}`;
+
+function registerBlock(id, type, dom, data={}) {
+  blocks.set(id, { id, dom, type, data });
+  dom.dataset.blockId = id;
+  dom.addEventListener("contextmenu", openContextMenu);
+  return id;
+}
+
+function flash(id) {
+  const b = blocks.get(id); if (!b) return;
+  b.dom.classList.remove("flash"); void b.dom.offsetWidth; b.dom.classList.add("flash");
+}
+
+function appendBlock(node) {
+  $("#stream").append(node);
+  // autoscroll if user is near bottom
+  const m = $("#main");
+  if (m.scrollHeight - m.scrollTop - m.clientHeight < 200) {
+    m.scrollTop = m.scrollHeight;
+  }
+}
+
+/* =========================================================
+   block renderers — each returns a DOM node and registers itself
+   ========================================================= */
+function renderHeader(icon, name, meta, status) {
+  return el("div", { class: "block-header" },
+    el("span", { class: "icon", html: icon }),
+    el("span", { class: "name" }, name),
+    el("span", { class: "meta" }, meta || now())
+  );
+}
+
+function makeUserBlock(text) {
+  const id = newId("user");
+  const node = el("div", { class: "block msg user", id },
+    renderHeader("👤", "you"),
+    el("div", { class: "block-body" }, text)
+  );
+  appendBlock(node);
+  registerBlock(id, "user", node, { text });
+  return id;
+}
+
+function makeAssistantBlock(text) {
+  const id = newId("ast");
+  const node = el("div", { class: "block msg" },
+    renderHeader("✦", "claude"),
+    el("div", { class: "block-body", html: text })
+  );
+  appendBlock(node);
+  registerBlock(id, "assistant", node, { text });
+  return id;
+}
+
+function makeThoughtBlock(text) {
+  const id = newId("thought");
+  const node = el("div", { class: "block thought" },
+    renderHeader("💭", "thinking"),
+    el("div", { class: "block-body" }, text)
+  );
+  appendBlock(node);
+  registerBlock(id, "thought", node, { text });
+  return id;
+}
+
+function makePlanBlock(title, items) {
+  const id = newId("plan");
+  const ul = el("ul");
+  items.forEach((label, i) => {
+    const li = el("li", { onclick: () => togglePlan(id, i) },
+      el("span", { class: "check" }),
+      el("span", { class: "label" }, label)
+    );
+    ul.append(li);
+  });
+  const node = el("div", { class: "block plan" },
+    renderHeader("📋", title),
+    el("div", { class: "block-body" }, ul)
+  );
+  appendBlock(node);
+  registerBlock(id, "plan", node, { title, items: items.map(label => ({ label, done: false, active: false })) });
+  updatePlanNav();
+  return id;
+}
+
+function togglePlan(id, i) {
+  const b = blocks.get(id); if (!b) return;
+  b.data.items[i].done = !b.data.items[i].done;
+  b.data.items[i].active = false;
+  refreshPlan(id);
+}
+
+function setPlanActive(id, i) {
+  const b = blocks.get(id); if (!b) return;
+  b.data.items.forEach(it => it.active = false);
+  if (i != null) b.data.items[i].active = true;
+  refreshPlan(id);
+}
+
+function setPlanDone(id, i) {
+  const b = blocks.get(id); if (!b) return;
+  b.data.items[i].done = true;
+  b.data.items[i].active = false;
+  refreshPlan(id);
+}
+
+function refreshPlan(id) {
+  const b = blocks.get(id); if (!b) return;
+  $$("li", b.dom).forEach((li, i) => {
+    li.classList.toggle("done", b.data.items[i].done);
+    li.classList.toggle("active", b.data.items[i].active);
+  });
+  flash(id);
+  updatePlanNav();
+}
+
+function updatePlanNav() {
+  let total = 0, done = 0;
+  for (const b of blocks.values()) {
+    if (b.type !== "plan") continue;
+    total += b.data.items.length;
+    done  += b.data.items.filter(x => x.done).length;
+  }
+  $("#nav-plan").textContent = `${done}/${total}`;
+}
+
+function makeFileEditBlock(filename, hunks) {
+  const id = newId("edit");
+  const diff = el("div", { class: "diff" });
+  let lineNo = hunks[0]?.startLine ?? 1;
+  hunks.forEach(h => {
+    h.lines.forEach(([kind, text]) => {
+      const cls = kind === "+" ? "add" : kind === "-" ? "del" : "ctx";
+      diff.append(el("div", { class: `row ${cls}` },
+        el("span", { class: "gutter" }, kind === "+" ? "" : kind === "-" ? "" : String(lineNo)),
+        document.createTextNode(text)
+      ));
+      if (kind !== "-") lineNo++;
+    });
+  });
+  const adds = hunks.flatMap(h => h.lines).filter(l => l[0] === "+").length;
+  const dels = hunks.flatMap(h => h.lines).filter(l => l[0] === "-").length;
+  const node = el("div", { class: "block ok" },
+    renderHeader("✎", filename, `+${adds} −${dels}`),
+    diff
+  );
+  appendBlock(node);
+  registerBlock(id, "edit", node, { filename, hunks });
+  trackFile(filename);
+  return id;
+}
+
+function trackFile(name) {
+  const list = $("#file-list");
+  if ($$(`.nav-item`, list).some(n => n.textContent.includes(name))) return;
+  list.append(el("div", { class: "nav-item" },
+    el("span", { class: "dot green" }),
+    el("span", null, name)
+  ));
+  $("#nav-files").textContent = String($$(".nav-item", list).length);
+}
+
+function makeTerminalBlock(cmd) {
+  const id = newId("term");
+  const term = el("pre", { class: "term" });
+  const node = el("div", { class: "block run" },
+    renderHeader("⌘", `$ ${cmd}`, "running…"),
+    el("div", { class: "block-body" }, term)
+  );
+  appendBlock(node);
+  registerBlock(id, "term", node, { cmd, lines: [] });
+  return id;
+}
+
+function termWrite(id, text, cls) {
+  const b = blocks.get(id); if (!b) return;
+  const term = $(".term", b.dom);
+  const span = cls ? el("span", { class: cls }, text + "\n") : document.createTextNode(text + "\n");
+  term.append(span);
+  term.scrollTop = term.scrollHeight;
+  b.data.lines.push({ text, cls });
+}
+
+function termDone(id, success=true) {
+  const b = blocks.get(id); if (!b) return;
+  b.dom.classList.remove("run");
+  b.dom.classList.add(success ? "ok" : "err");
+  $(".meta", b.dom).textContent = success ? "exit 0" : "exit 1";
+}
+
+function makeTestsBlock(title, tests) {
+  const id = newId("tests");
+  const list = el("div", { class: "tests" });
+  tests.forEach(t => list.append(makeTestRow(t)));
+  const summary = el("div", { class: "tests-summary" });
+  const node = el("div", { class: "block run" },
+    renderHeader("✓", title, "running…"),
+    el("div", { class: "block-body" }, list, summary)
+  );
+  appendBlock(node);
+  registerBlock(id, "tests", node, { title, tests });
+  refreshTestsSummary(id);
+  return id;
+}
+
+function makeTestRow(t) {
+  return el("div", { class: `test ${t.status}`, "data-test": t.name },
+    el("span", { class: "badge" }, t.status === "pass" ? "✓" : t.status === "fail" ? "✕" : t.status === "run" ? "…" : ""),
+    el("span", { class: "name" }, t.name),
+    el("span", { class: "time" }, t.time || "")
+  );
+}
+
+function setTestStatus(id, name, status, time) {
+  const b = blocks.get(id); if (!b) return;
+  const t = b.data.tests.find(x => x.name === name);
+  if (!t) return;
+  t.status = status; t.time = time || t.time;
+  const row = $(`.test[data-test="${CSS.escape(name)}"]`, b.dom);
+  row.replaceWith(makeTestRow(t));
+  refreshTestsSummary(id);
+}
+
+function finishTests(id) {
+  const b = blocks.get(id); if (!b) return;
+  const failed = b.data.tests.filter(x => x.status === "fail").length;
+  b.dom.classList.remove("run");
+  b.dom.classList.add(failed ? "err" : "ok");
+  $(".meta", b.dom).textContent = failed ? `${failed} failed` : "all passed";
+}
+
+function refreshTestsSummary(id) {
+  const b = blocks.get(id); if (!b) return;
+  const c = { pass: 0, fail: 0, run: 0, pend: 0 };
+  b.data.tests.forEach(t => c[t.status]++);
+  $(".tests-summary", b.dom).innerHTML =
+    `<span><b>${c.pass}</b> pass</span><span><b>${c.fail}</b> fail</span><span><b>${c.run}</b> running</span><span><b>${c.pend}</b> pending</span>`;
+  $("#nav-tests").textContent = `${c.pass}/${b.data.tests.length}`;
+}
+
+function makeQuestionBlock(question, options) {
+  const id = newId("q");
+  const opts = el("div", { class: "opts" });
+  options.forEach((o, i) => {
+    opts.append(el("div", {
+      class: "opt",
+      onclick: () => answerQuestion(id, i)
+    },
+      el("div", { class: "opt-label" }, o.label),
+      el("div", { class: "opt-desc" }, o.desc)
+    ));
+  });
+  const node = el("div", { class: "block question warn" },
+    renderHeader("?", "question for you"),
+    el("div", { class: "block-body" },
+      el("div", null, question),
+      opts
+    )
+  );
+  appendBlock(node);
+  registerBlock(id, "question", node, { question, options, picked: null });
+  $("#nav-q").textContent = String([...blocks.values()].filter(b => b.type === "question" && b.data.picked == null).length);
+  return id;
+}
+
+function answerQuestion(id, i) {
+  const b = blocks.get(id); if (!b || b.data.picked != null) return;
+  b.data.picked = i;
+  $$(".opt", b.dom).forEach((o, idx) => o.classList.toggle("picked", idx === i));
+  $(".meta", b.dom).textContent = "answered";
+  $("#nav-q").textContent = String([...blocks.values()].filter(x => x.type === "question" && x.data.picked == null).length);
+  // simulate the agent reacting
+  setTimeout(() => makeAssistantBlock(`Got it — going with <b>${b.data.options[i].label}</b>. Updating the plan.`), 400);
+}
+
+function makeSearchBlock(query, results) {
+  const id = newId("search");
+  const list = el("div", { class: "search-results" });
+  results.forEach(r => {
+    const snipHtml = r.snip.replace(new RegExp(`(${query})`, "gi"), "<mark>$1</mark>");
+    list.append(el("div", { class: "search-result" },
+      el("span", { class: "path" }, r.file),
+      el("span", { class: "ln" }, ":" + r.line),
+      el("span", { class: "snip", html: snipHtml })
+    ));
+  });
+  const node = el("div", { class: "block" },
+    renderHeader("🔎", `grep "${query}"`, `${results.length} matches`),
+    el("div", { class: "block-body" }, list)
+  );
+  appendBlock(node);
+  registerBlock(id, "search", node, { query, results });
+  return id;
+}
+
+function makeToolBlock(name, summary, body) {
+  const id = newId("tool");
+  const det = el("details", { class: "tool" },
+    el("summary", null, name + "  ", el("span", { style: "color: var(--fg-mute)" }, summary)),
+    el("div", { class: "body" }, body)
+  );
+  const node = el("div", { class: "block" },
+    renderHeader("🔧", "tool call"),
+    el("div", { class: "block-body" }, det)
+  );
+  appendBlock(node);
+  registerBlock(id, "tool", node, { name, summary, body });
+  return id;
+}
+
+/* =========================================================
+   right-click context menu — the killer feature
+   ========================================================= */
+let menuTarget = null;
+function openContextMenu(ev) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  const blockEl = ev.currentTarget;
+  menuTarget = blocks.get(blockEl.dataset.blockId);
+  const m = $("#ctx-menu");
+  m.innerHTML = "";
+  const items = contextActionsFor(menuTarget);
+  items.forEach(it => {
+    if (it === "-") { m.append(el("hr")); return; }
+    m.append(el("button", { class: it.danger ? "danger" : "", onclick: () => { it.run(); closeContextMenu(); } },
+      el("span", null, it.label),
+      it.kbd ? el("span", { class: "kbd" }, it.kbd) : null
+    ));
+  });
+  m.style.display = "block";
+  // position
+  const x = Math.min(ev.clientX, window.innerWidth - 240);
+  const y = Math.min(ev.clientY, window.innerHeight - m.offsetHeight - 10);
+  m.style.left = x + "px";
+  m.style.top  = y + "px";
+}
+function closeContextMenu() { $("#ctx-menu").style.display = "none"; menuTarget = null; }
+document.addEventListener("click", closeContextMenu);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeContextMenu(); });
+
+function contextActionsFor(b) {
+  if (!b) return [];
+  const common = [
+    { label: "Ask claude about this block",   kbd: "↩",     run: () => askAbout(b) },
+    { label: "Reference in next message",     kbd: "@",     run: () => referenceBlock(b) },
+    "-",
+    { label: "Copy as text",                                run: () => navigator.clipboard?.writeText(blockAsText(b)) },
+    { label: "Pin to top",                                  run: () => pinBlock(b) },
+  ];
+  const extras = {
+    edit:     [{ label: "Show full file",          run: () => makeAssistantBlock(`Opening <code class="inline">${b.data.filename}</code> in a side panel… (mock)`) },
+               { label: "Revert this edit", danger: true, run: () => makeAssistantBlock(`Reverted the edit to <code class="inline">${b.data.filename}</code>. (mock)`) }],
+    term:     [{ label: "Re-run command",          run: () => makeTerminalBlock(b.data.cmd) },
+               { label: "Explain this output",     run: () => askAbout(b, "Explain what this output means.") }],
+    tests:    [{ label: "Re-run failing tests",    run: () => makeAssistantBlock("Re-running the 1 failing test… (mock)") },
+               { label: "Why did this fail?",      run: () => askAbout(b, "Why did the failing test fail and how do I fix it?") }],
+    plan:     [{ label: "Re-plan from here",       run: () => askAbout(b, "Reconsider the plan from this point.") }],
+    question: [{ label: "I'll decide later",       run: () => makeAssistantBlock("Okay — leaving the question open. I'll keep working on the rest.") }],
+    search:   [{ label: "Refine this search",      run: () => askAbout(b, "Narrow this search to just src/payments.") }],
+    user:     [{ label: "Edit and resend",         run: () => { $("#composer").value = b.data.text; $("#composer").focus(); } }],
+  };
+  return [...(extras[b.type] || []), ...(extras[b.type] ? ["-"] : []), ...common];
+}
+
+function blockAsText(b) {
+  if (b.type === "user" || b.type === "assistant" || b.type === "thought") return b.data.text;
+  if (b.type === "edit") return `--- ${b.data.filename} ---\n` + b.data.hunks.flatMap(h => h.lines.map(l => l[0] + l[1])).join("\n");
+  if (b.type === "term") return `$ ${b.data.cmd}\n` + b.data.lines.map(l => l.text).join("\n");
+  if (b.type === "tests") return b.data.tests.map(t => `${t.status.toUpperCase()} ${t.name}`).join("\n");
+  return JSON.stringify(b.data, null, 2);
+}
+
+function askAbout(b, defaultPrompt="") {
+  // scroll the block into view + highlight, then put a reference into the composer
+  $$(".block.referenced").forEach(n => n.classList.remove("referenced"));
+  b.dom.classList.add("referenced");
+  b.dom.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  const c = $("#composer");
+  const ref = `@${b.id}`;
+  c.value = defaultPrompt
+    ? `${ref} ${defaultPrompt}`
+    : `${ref} `;
+  c.focus();
+  c.setSelectionRange(c.value.length, c.value.length);
+}
+
+function referenceBlock(b) {
+  const c = $("#composer");
+  c.value += (c.value && !c.value.endsWith(" ") ? " " : "") + `@${b.id} `;
+  c.focus();
+}
+
+function pinBlock(b) {
+  // just visual: move clone to top with a "pinned" header
+  makeAssistantBlock(`Pinned <span class="ref">@${b.id}</span> to the top of the session. (mock)`);
+}
+
+/* clicking a @ref inside a message scrolls to that block */
+document.addEventListener("click", e => {
+  const r = e.target.closest(".ref");
+  if (!r) return;
+  const id = r.textContent.replace(/^@/, "");
+  const b = blocks.get(id);
+  if (!b) return;
+  $$(".block.referenced").forEach(n => n.classList.remove("referenced"));
+  b.dom.classList.add("referenced");
+  b.dom.scrollIntoView({ behavior: "smooth", block: "center" });
+  setTimeout(() => b.dom.classList.remove("referenced"), 1800);
+});
+
+/* sidebar jump-to */
+$$(".nav-item[data-jump]").forEach(n => n.addEventListener("click", () => {
+  const target = n.dataset.jump;
+  if (target === "end") { const m = $("#main"); m.scrollTop = m.scrollHeight; return; }
+  const node = document.getElementById(target);
+  node?.scrollIntoView({ behavior: "smooth", block: "center" });
+}));
+
+/* composer */
+const composer = $("#composer");
+composer.addEventListener("input", () => {
+  composer.style.height = "auto";
+  composer.style.height = Math.min(composer.scrollHeight, 140) + "px";
+});
+composer.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+$("#send").addEventListener("click", send);
+function send() {
+  const text = composer.value.trim();
+  if (!text) return;
+  makeUserBlock(text);
+  composer.value = "";
+  composer.style.height = "auto";
+  // mock reply
+  setTimeout(() => makeAssistantBlock("Got it — let me look at that. (mock reply)"), 600);
+}
+
+/* =========================================================
+   the demo "agent run" — fakes a real session so you can play
+   ========================================================= */
+async function demo() {
+  // user request
+  const u = makeUserBlock("the checkout endpoint sometimes double-charges on retry. add idempotency keys.");
+  $(u).id = "user-1";  // wrong, fix
+  blocks.get(u).dom.id = "user-1";
+
+  await sleep(500);
+  makeThoughtBlock("Looking at the retry path in the payment handler. Need to figure out where to thread the key through.");
+
+  await sleep(700);
+  makeSearchBlock("retry", [
+    { file: "src/payments/charge.ts", line: 42, snip: "if (err.code === 'NETWORK') return retry(req)" },
+    { file: "src/payments/charge.ts", line: 88, snip: "// TODO: idempotency on retry" },
+    { file: "src/http/client.ts",     line: 17, snip: "export async function retry<T>(fn: () => Promise<T>) {" },
+  ]);
+
+  await sleep(800);
+  const planId = makePlanBlock("Plan: idempotency keys for /charge", [
+    "Add idempotency_key column to charges table",
+    "Generate UUID per request in handler",
+    "Pass key through to Stripe SDK call",
+    "Short-circuit on duplicate key (return cached response)",
+    "Add tests for retry behavior",
+  ]);
+  blocks.get(planId).dom.id = "plan-1";
+  setPlanActive(planId, 0);
+
+  await sleep(900);
+  const t1 = makeTerminalBlock("psql -c \"\\d charges\"");
+  await sleep(400);
+  termWrite(t1, "                Table \"public.charges\"");
+  termWrite(t1, "    Column     |     Type     | Nullable");
+  termWrite(t1, " --------------+--------------+----------");
+  termWrite(t1, "  id           | uuid         | not null");
+  termWrite(t1, "  amount_cents | integer      | not null");
+  termWrite(t1, "  created_at   | timestamptz  | not null", "dim");
+  await sleep(300);
+  termDone(t1, true);
+
+  await sleep(500);
+  makeFileEditBlock("migrations/0042_charges_idempotency.sql", [{
+    startLine: 1,
+    lines: [
+      ["+", "ALTER TABLE charges"],
+      ["+", "  ADD COLUMN idempotency_key text UNIQUE;"],
+      ["+", ""],
+      ["+", "CREATE INDEX charges_idem_idx ON charges(idempotency_key);"],
+    ]
+  }]);
+  setPlanDone(planId, 0); setPlanActive(planId, 1);
+
+  await sleep(700);
+  makeFileEditBlock("src/payments/charge.ts", [{
+    startLine: 38,
+    lines: [
+      [" ", "export async function charge(req: ChargeRequest) {"],
+      ["-", "  const result = await stripe.charges.create({"],
+      ["-", "    amount: req.amount,"],
+      ["-", "    currency: req.currency,"],
+      ["-", "  });"],
+      ["+", "  const key = req.idempotencyKey ?? randomUUID();"],
+      ["+", "  const cached = await db.charges.findByKey(key);"],
+      ["+", "  if (cached) return cached;"],
+      ["+", ""],
+      ["+", "  const result = await stripe.charges.create("],
+      ["+", "    { amount: req.amount, currency: req.currency },"],
+      ["+", "    { idempotencyKey: key },"],
+      ["+", "  );"],
+      [" ", "  return result;"],
+      [" ", "}"],
+    ]
+  }]);
+  setPlanDone(planId, 1); setPlanDone(planId, 2); setPlanActive(planId, 3);
+
+  await sleep(800);
+  makeQuestionBlock(
+    "Two ways to handle a duplicate key on a different amount — pick one:",
+    [
+      { label: "Reject with 409 Conflict",   desc: "Strict: amount mismatch on a reused key is a client bug." },
+      { label: "Return the original charge", desc: "Lenient: matches Stripe's own behavior, ignores the new amount." },
+    ]
+  );
+
+  await sleep(900);
+  makeFileEditBlock("src/payments/charge.test.ts", [{
+    startLine: 1,
+    lines: [
+      ["+", "test(\"double-submit returns cached charge\", async () => {"],
+      ["+", "  const key = randomUUID();"],
+      ["+", "  const a = await charge({ amount: 500, idempotencyKey: key });"],
+      ["+", "  const b = await charge({ amount: 500, idempotencyKey: key });"],
+      ["+", "  expect(a.id).toBe(b.id);"],
+      ["+", "});"],
+    ]
+  }]);
+  setPlanDone(planId, 3); setPlanActive(planId, 4);
+
+  await sleep(600);
+  const tests = makeTestsBlock("vitest src/payments", [
+    { name: "charge › creates a charge",              status: "run" },
+    { name: "charge › retries on network error",      status: "pend" },
+    { name: "charge › double-submit returns cached",  status: "pend" },
+    { name: "charge › different amount, same key",    status: "pend" },
+  ]);
+  await sleep(700);
+  setTestStatus(tests, "charge › creates a charge", "pass", "12ms");
+  setTestStatus(tests, "charge › retries on network error", "run");
+  await sleep(700);
+  setTestStatus(tests, "charge › retries on network error", "pass", "44ms");
+  setTestStatus(tests, "charge › double-submit returns cached", "run");
+  await sleep(700);
+  setTestStatus(tests, "charge › double-submit returns cached", "pass", "31ms");
+  setTestStatus(tests, "charge › different amount, same key", "run");
+  await sleep(900);
+  setTestStatus(tests, "charge › different amount, same key", "fail", "18ms");
+  finishTests(tests);
+  setPlanActive(planId, null);
+
+  await sleep(500);
+  makeAssistantBlock(
+    "Migration, handler change, and three of four tests are green. " +
+    "The failing test (<span class='ref'>@" + tests + "</span>) depends on which behavior you pick in " +
+    "<span class='ref'>@q-7</span>. Right-click the test block to ask why it's failing, " +
+    "or pick an option in the question block."
+  );
+
+  $("#live-pill").textContent = "idle";
+  $("#live-pill").classList.remove("live");
+
+  // mark end
+  const end = el("div", { id: "end", style: "height: 1px;" });
+  $("#stream").append(end);
+}
+
+demo();
+</script>
+</body>
+</html>
