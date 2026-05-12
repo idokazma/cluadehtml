@@ -52,6 +52,32 @@ This is what makes the page a **session** and not a slideshow. The history is co
 - **Sharable sessions.** The page is one self-contained artifact. Send it; everything is there.
 - **A unified surface for what used to be N separate Claude tools.** Plans, diffs, design explorations, throwaway editors — they're all just components in the same stack.
 
+## Two implications worth naming
+
+**The rendering is done by an agent, not a table.** The main agent —
+the Claude session doing your actual work — shouldn't have to decide
+"should this be a decision card or a paragraph?" while it's busy
+reading files and editing code. So beside it runs a smaller
+*interface agent* whose only job is to look at each chunk of the main
+agent's output and pick the component that best expresses it. The
+mapping is not a static lookup. The same tool result might become a
+chart in one context and a tree in another. Many of the most valuable
+components — decision cards from prose offering 3 options, sparklines
+from numbers in a tool result, diagrams from explanation text — never
+correspond to a tool call at all; they emerge from text the main agent
+wrote naturally.
+
+**The page is bidirectional.** A component is not display-only. When
+the user clicks an option on a decision card, drags a slider, picks a
+design tile, or right-clicks to ask about a specific block, that
+interaction is structured (it carries the component id and a typed
+action) and flows back into the main agent's session as a synthesized
+user message. The 3-option case is the canonical one: today you'd
+type "I want option 2"; with this design you click. The page is both
+output and input. The conversation stops being text-in / text-out and
+starts being *structured operations on a stack of stateful objects* —
+with typing still available as a fallback.
+
 ## What This Is Not
 
 - It is not a chat app where messages happen to render markdown nicely. The reply is a component, not a styled message.

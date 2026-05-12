@@ -364,9 +364,8 @@
   <nav>
     <a href="#big-picture">big picture</a>
     <a href="#event-flow">one event</a>
-    <a href="#mapping">mapping</a>
-    <a href="#mcp">render_*</a>
-    <a href="#actions">user actions</a>
+    <a href="#mapping">interface agent</a>
+    <a href="#actions">bidirectional</a>
     <a href="#storage">storage</a>
     <a href="#project">project page</a>
   </nav>
@@ -377,25 +376,35 @@
   <h1>How the system works</h1>
   <p class="lede">
     A wrapper around Claude Code — call it <b>stack</b> — that turns every
-    agent session into a live HTML page of interactive components. Each
-    tool call, text reply, and tool result becomes (or updates) a component
-    in a single stacked document. This page draws all of that out: the
-    boxes, the lines between them, what flows along each line, and how an
-    HTML component is born from an agent event.
+    agent session into a live HTML page of interactive components.
+    <b>Two agents are involved</b>: the main agent does the work the user
+    asked for; a smaller <b>interface agent</b> watches its event stream
+    and decides what HTML component best expresses each chunk. The
+    rendering is not a static lookup table — it is a model call with a
+    component vocabulary. And the page is <b>bidirectional</b>: clicks,
+    picks, slider drags, and edits become inputs that flow back into the
+    main agent's session.
+  </p>
+  <p class="lede" style="margin-top: 6px;">
+    This page draws all of that out: the boxes, the lines between them,
+    what flows along each line, and how an HTML component is born — and
+    acted on.
   </p>
 
   <!-- ============================================================ -->
   <h2 id="big-picture"><span class="num">1</span><b>The big picture</b></h2>
   <p>
-    Six moving parts. The user prompts; Claude Code emits events; a small
-    <b>wrapper</b> ingests those events and decides what to render; the
-    <b>mapper</b> turns each event into a typed mutation; the mutations are
-    appended to a per-session <b>event log</b> and pushed live to the
-    <b>browser</b> over SSE. Hover any box to highlight its connections.
+    Two agents, two flow directions. The <b>main agent</b> is the
+    Claude Code session that does the work — it streams events
+    (tool_use, tool_result, text). The <b>interface agent</b> sits
+    beside it and decides, for each chunk, what HTML component best
+    expresses it. Components stack into a live page; user
+    interactions on those components flow back the other way as
+    synthesized session inputs.
   </p>
 
   <div class="diagram">
-    <div class="caption">Architecture · all flows</div>
+    <div class="caption">Architecture · two agents, bidirectional flow</div>
 
     <div class="arch" id="arch">
 
@@ -404,23 +413,23 @@
         <div class="node user" data-key="user">
           <span class="nt">human</span>
           <span class="nn">you</span>
-          <span class="nd">types prompts · clicks components · scrolls history</span>
+          <span class="nd">types prompts · clicks components · drags sliders · scrolls history</span>
         </div>
       </div>
 
       <!-- row 2: ingest -->
       <div class="cell">
         <div class="node claude" data-key="claude">
-          <span class="nt">subprocess · stack run</span>
-          <span class="nn">claude -p</span>
-          <span class="nd"><code>--output-format stream-json</code></span>
+          <span class="nt">main agent · stack run</span>
+          <span class="nn">claude (Sonnet/Opus)</span>
+          <span class="nd"><code>-p --output-format stream-json</code></span>
         </div>
       </div>
       <div class="cell">
         <div class="node mcp" data-key="mcp">
-          <span class="nt">mcp server</span>
+          <span class="nt">mcp server (rare scaffolds)</span>
           <span class="nn">stack-mcp</span>
-          <span class="nd">render_decision · render_compare · render_playground · …</span>
+          <span class="nd">render_playground · render_designs · …</span>
         </div>
       </div>
       <div class="cell">
@@ -431,12 +440,26 @@
         </div>
       </div>
 
-      <!-- row 3: wrapper + mapper -->
-      <div class="cell" style="grid-column: 1 / -1;">
-        <div class="node" data-key="wrapper" style="min-width: 320px;">
+      <!-- row 3: prefilter + interface agent -->
+      <div class="cell">
+        <div class="node" data-key="prefilter">
+          <span class="nt">layer 1 · instant</span>
+          <span class="nn">prefilter</span>
+          <span class="nd">deterministic shape for obvious cases (Bash→terminal, Edit→diff)</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="node browser" data-key="iface" style="border-color: var(--purple); background: #1f1a2e;">
+          <span class="nt">layer 2 · smart</span>
+          <span class="nn" style="color: var(--purple);">interface agent (Haiku)</span>
+          <span class="nd">component vocabulary · replaces · enriches · inserts · html-escape</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="node" data-key="wrapper">
           <span class="nt">wrapper · node</span>
           <span class="nn">stack</span>
-          <span class="nd">parse stream → mapper → emit mutations</span>
+          <span class="nd">orchestrates both layers</span>
         </div>
       </div>
 
@@ -452,14 +475,14 @@
         <div class="node" data-key="server">
           <span class="nt">local server · node</span>
           <span class="nn">stack server</span>
-          <span class="nd">SSE /events · POST /api/prompt · POST /api/action</span>
+          <span class="nd">SSE /events · POST /api/action · synthesizes inputs back to claude</span>
         </div>
       </div>
       <div class="cell">
         <div class="node browser" data-key="browser">
           <span class="nt">browser</span>
           <span class="nn">session.html / project.html</span>
-          <span class="nd">apply mutations · render component stack</span>
+          <span class="nd">renders components · emits user actions</span>
         </div>
       </div>
 
@@ -546,43 +569,130 @@
   </p>
 
   <!-- ============================================================ -->
-  <h2 id="mapping"><span class="num">3</span><b>How tool calls become components</b></h2>
+  <h2 id="mapping"><span class="num">3</span><b>How agent output becomes components</b></h2>
   <p>
-    The mapper has two layers. The first is a fixed table for built-in
-    Claude Code tools. The second is the <code>render_*</code> MCP server,
-    which lets the model ask for bespoke components by calling tools.
+    Rendering decisions are made by an <b>interface agent</b>, not a
+    fixed table. The interface agent's job is small and well-scoped:
+    look at a chunk of the main agent's stream, decide what component
+    expresses it best. It runs on top of a thin deterministic
+    prefilter (for the always-the-same cases) and beside an explicit
+    MCP channel (for the rare cases where the main agent already knows
+    what UI it wants). Three layers, increasing intelligence and cost.
   </p>
 
-  <h3>Layer 1 · heuristic mapping table</h3>
+  <h3>Layer 1 · deterministic prefilter (instant)</h3>
+  <p>
+    Some shapes are obvious and the user shouldn't wait on a model
+    call. These get a baseline descriptor immediately, so a component
+    appears the moment the event arrives.
+  </p>
   <div class="mapping">
     <table>
       <thead>
-        <tr><th>tool call</th><th></th><th>component</th><th>lifecycle</th></tr>
+        <tr><th>obvious case</th><th></th><th>baseline component</th><th>notes</th></tr>
       </thead>
       <tbody>
-        <tr><td><code>TodoWrite</code></td><td class="arrow">→</td><td><span class="kind plan">plan</span></td><td>mutate in place on subsequent calls; stable id per session</td></tr>
-        <tr><td><code>Edit</code> · <code>Write</code></td><td class="arrow">→</td><td><span class="kind diff">diff</span></td><td>before/after; revert affordance</td></tr>
-        <tr><td><code>Read</code></td><td class="arrow">→</td><td><span class="kind code">file-viewer</span></td><td>inline with line range</td></tr>
-        <tr><td><code>Bash</code></td><td class="arrow">→</td><td><span class="kind term">terminal</span></td><td>streaming; lines append as they arrive</td></tr>
-        <tr><td><code>Glob</code> · <code>Grep</code></td><td class="arrow">→</td><td><span class="kind search">search</span></td><td>list of file:line + highlighted snippet</td></tr>
-        <tr><td><code>WebFetch</code> · <code>WebSearch</code></td><td class="arrow">→</td><td><span class="kind web">web-result</span></td><td>title · summary · link</td></tr>
-        <tr><td><code>Task</code> (subagent)</td><td class="arrow">→</td><td><span class="kind">subagent</span></td><td>collapsible; contains a nested stack — recursive renderer</td></tr>
-        <tr><td>any MCP tool</td><td class="arrow">→</td><td><span class="kind">tool</span></td><td>generic fallback: tool name, params, collapsible result</td></tr>
-        <tr><td>assistant <code>text</code> block</td><td class="arrow">→</td><td><span class="kind">note</span> or <span class="kind code">code</span></td><td>code if mostly a fenced block, else a small note</td></tr>
+        <tr><td><code>Bash</code></td><td class="arrow">→</td><td><span class="kind term">terminal</span></td><td>streaming; interface agent may insert a chart beside if numeric</td></tr>
+        <tr><td><code>Edit</code> · <code>Write</code></td><td class="arrow">→</td><td><span class="kind diff">diff</span></td><td>almost never wants overriding</td></tr>
+        <tr><td><code>Read</code></td><td class="arrow">→</td><td><span class="kind code">file-viewer</span></td><td>interface agent may replace with a tree if browsing code</td></tr>
+        <tr><td><code>Glob</code> · <code>Grep</code></td><td class="arrow">→</td><td><span class="kind search">search</span></td><td>interface agent may bucket into a directory tree if many hits</td></tr>
+        <tr><td><code>WebFetch</code> · <code>WebSearch</code></td><td class="arrow">→</td><td><span class="kind web">web-result</span></td><td>can be enriched with quote callouts</td></tr>
+        <tr><td><code>Task</code> (subagent)</td><td class="arrow">→</td><td><span class="kind">subagent</span></td><td>recursive — inner stack runs the same pipeline</td></tr>
+        <tr><td>everything else</td><td class="arrow">→</td><td><span class="kind">note</span></td><td>placeholder until the interface agent shapes it</td></tr>
       </tbody>
     </table>
   </div>
 
-  <h3 id="mcp">Layer 2 · the <code>render_*</code> MCP server</h3>
+  <h3 id="iface-agent">Layer 2 · interface agent (smart)</h3>
   <p>
-    The interesting components in the mockup — decision cards, comparison
-    tables, design explorations, theme playgrounds, schema diagrams — aren't
-    standard tool calls. So we ship an MCP server, <b>stack-mcp</b>, that
-    exposes <code>render_*</code> tools. When the model wants one of these,
-    it calls the matching tool; the wrapper sees the tool_use, decodes the
-    payload against a known schema, and renders the component. The model
-    effectively has "speak in components" as part of its toolbox.
+    A second, smaller model (Haiku 4.5) runs in parallel. Its system
+    prompt holds the <b>component vocabulary</b> — a versioned schema of
+    every component type the page can render, plus when-to-use guidance.
+    It receives a settled chunk of events and outputs descriptors. It
+    can <b>replace</b>, <b>enrich</b>, or <b>insert</b> components on
+    top of the prefilter's baseline.
   </p>
+
+  <div class="callout">
+    <b>The unlock.</b> The main agent doesn't have to pick its own UI.
+    It writes prose, calls tools, returns answers. The interface agent
+    shapes that output into something the user can interact with —
+    turning "here are 3 options, which do you prefer?" prose into a
+    clickable <code>decision</code> card with no extra effort from the
+    main agent.
+  </div>
+
+  <h4 style="margin-top: 14px; font-size: 13px; color: var(--fg-dim);">Three things the interface agent does</h4>
+  <div class="legend">
+    <div class="item">
+      <div class="ic" style="color: var(--accent);">↺</div>
+      <div><div class="nm">replace</div><div class="ds">"that terminal output is JSON — render as a tree instead of pre"</div></div>
+    </div>
+    <div class="item">
+      <div class="ic" style="color: var(--green);">+</div>
+      <div><div class="nm">enrich</div><div class="ds">"these numbers in the tool result deserve a sparkline beside them"</div></div>
+    </div>
+    <div class="item">
+      <div class="ic" style="color: var(--purple);">★</div>
+      <div><div class="nm">insert</div><div class="ds">"this prose offers 3 options — synthesize a decision card"</div></div>
+    </div>
+  </div>
+
+  <h4 style="margin-top: 18px; font-size: 13px; color: var(--fg-dim);">An example</h4>
+  <div class="event-sample" style="white-space: pre-wrap;"><span class="c">// the main agent writes prose:</span>
+<span class="v">"There are 3 reasonable ways to handle skipped days:
+1) Auto grace day — every Nth missed day is free, no UI.
+2) Manual freeze — user taps 'freeze' before midnight.
+3) Both — 1 auto + 2 manual / month.
+Which do you prefer?"</span>
+
+<span class="c">// the interface agent returns:</span>
+[
+  { type: <span class="v">"note"</span>,     props: { text: <span class="v">"There are 3 reasonable ways..."</span> } },
+  { type: <span class="v">"decision"</span>, props: {
+      question: <span class="v">"How should we handle skipped days?"</span>,
+      options: [
+        { label: <span class="v">"Auto grace day"</span>, desc: <span class="v">"..."</span> },
+        { label: <span class="v">"Manual freeze"</span>,  desc: <span class="v">"..."</span> },
+        { label: <span class="v">"Both"</span>,           desc: <span class="v">"..."</span> },
+      ],
+  }},
+]</div>
+
+  <h4 style="margin-top: 18px; font-size: 13px; color: var(--fg-dim);">The component vocabulary</h4>
+  <p>
+    The agent's system prompt enumerates every legal component type. A
+    sample of the vocabulary (most also reachable through Layer 1 or
+    Layer 3):
+  </p>
+  <div class="legend">
+    <div class="item"><div class="ic">📋</div><div><div class="nm">plan</div><div class="ds">checklist of steps</div></div></div>
+    <div class="item"><div class="ic">?</div><div><div class="nm">decision</div><div class="ds">question + clickable options</div></div></div>
+    <div class="item"><div class="ic">⚖</div><div><div class="nm">compare</div><div class="ds">trade-off matrix</div></div></div>
+    <div class="item"><div class="ic">🎨</div><div><div class="nm">designs</div><div class="ds">grid of mockups</div></div></div>
+    <div class="item"><div class="ic">📊</div><div><div class="nm">chart / sparkline</div><div class="ds">numeric data</div></div></div>
+    <div class="item"><div class="ic">🗂</div><div><div class="nm">schema</div><div class="ds">entity-relationship diagram</div></div></div>
+    <div class="item"><div class="ic">🌳</div><div><div class="nm">tree</div><div class="ds">hierarchical data (files, JSON, AST)</div></div></div>
+    <div class="item"><div class="ic">⟨/⟩</div><div><div class="nm">code</div><div class="ds">syntax-highlighted snippet</div></div></div>
+    <div class="item"><div class="ic">✎</div><div><div class="nm">diff</div><div class="ds">before/after, revertable</div></div></div>
+    <div class="item"><div class="ic">⌘</div><div><div class="nm">terminal</div><div class="ds">streaming process output</div></div></div>
+    <div class="item"><div class="ic">✓</div><div><div class="nm">tests</div><div class="ds">pass/fail rows</div></div></div>
+    <div class="item" style="border-color: var(--red);"><div class="ic">⚠</div><div><div class="nm">html</div><div class="ds">escape hatch · raw HTML/SVG in sandboxed iframe</div></div></div>
+  </div>
+
+  <h3 id="mcp">Layer 3 · explicit emission via MCP (rare)</h3>
+  <p>
+    Sometimes the main agent already knows exactly what UI it wants —
+    e.g., an animation playground with specific sliders, or a side-by-side
+    design exploration with predefined slots. For these, it can call a
+    <code>render_*</code> tool directly via <b>stack-mcp</b>. The
+    interface agent skips interpretation; the structure is canonical.
+  </p>
+  <div class="legend">
+    <div class="item"><div class="ic">🎚</div><div><div class="nm">render_playground</div><div class="ds">kind, params{} — full control of the slider/preview layout</div></div></div>
+    <div class="item"><div class="ic">🎨</div><div><div class="nm">render_designs</div><div class="ds">designs[] — fixed grid of mocks</div></div></div>
+    <div class="item"><div class="ic">⟨/⟩</div><div><div class="nm">render_code</div><div class="ds">when the model wants a code block to skip interpretation</div></div></div>
+  </div>
 
   <div class="legend">
     <div class="item"><div class="ic">📋</div><div><div class="nm">render_plan</div><div class="ds">items[]</div></div></div>
@@ -637,59 +747,101 @@
   </div>
 
   <!-- ============================================================ -->
-  <h2 id="actions"><span class="num">4</span><b>User actions go back the other way</b></h2>
+  <h2 id="actions"><span class="num">4</span><b>The page is bidirectional · components are inputs</b></h2>
   <p>
-    Components are interactive. When the user picks a decision option,
-    drags a slider, clicks "copy as prompt", or right-clicks "ask about
-    this", the page POSTs to the server. The server either synthesizes a
-    follow-up user message (and re-runs claude with <code>--resume &lt;id&gt;
-    -p "&lt;text&gt;"</code>) or, when running in <b>attach</b> mode, writes
-    a message into the live session.
+    The whole point of replacing the markdown terminal is so the user
+    can <i>act</i> on what they see. Today, when Claude Code asks "do
+    you want A, B, or C?" you type back which one. With components, you
+    click. The click becomes a structured action that the server
+    synthesizes into a follow-up user message and routes back into the
+    main agent's session.
   </p>
 
-  <div class="diagram">
+  <h3>What every interactive component declares</h3>
+  <p>Each component type in the vocabulary lists its <b>actions</b> — what the user can do, and what data each emits:</p>
+  <div class="mapping">
+    <table>
+      <thead><tr><th>component</th><th>user does</th><th>action emitted</th></tr></thead>
+      <tbody>
+        <tr><td><span class="kind">decision</span></td><td>clicks an option</td><td><code>{ kind: "pick", id: "dec-7", option: 2, label: "Manual freeze" }</code></td></tr>
+        <tr><td><span class="kind">playground</span></td><td>tunes + clicks Apply</td><td><code>{ kind: "apply", id: "play-3", params: { … } }</code></td></tr>
+        <tr><td><span class="kind">compare</span></td><td>picks a row</td><td><code>{ kind: "pick", id: "cmp-2", row: 1 }</code></td></tr>
+        <tr><td><span class="kind">designs</span></td><td>picks a tile</td><td><code>{ kind: "pick", id: "des-4", choice: "Streak hero" }</code></td></tr>
+        <tr><td><span class="kind plan">plan</span></td><td>toggles a step</td><td><code>{ kind: "toggle", id: "plan-1", step: 3 }</code></td></tr>
+        <tr><td><span class="kind diff">diff</span></td><td>clicks revert</td><td><code>{ kind: "revert", id: "diff-9", file: "…" }</code></td></tr>
+        <tr><td><span class="kind code">code</span></td><td>edits + re-prompts</td><td><code>{ kind: "edit", id: "code-5", new_code: "…" }</code></td></tr>
+        <tr><td>any</td><td>right-click → ask</td><td><code>{ kind: "ask", id: "&lt;any&gt;", text: "…" }</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>From action to session input</h3>
+  <p>
+    The server's <code>POST /api/action</code> handler synthesizes a
+    follow-up user message. Two strategies, picked by action kind:
+  </p>
+  <div class="event-sample" style="white-space: pre-wrap;"><span class="c">// strategy 1 · reference-and-narrate (decisions, picks, toggles)</span>
+<span class="v">"[interaction with @dec-7]
+Picked option 2 of 3: Manual freeze — user taps 'freeze today' before midnight."</span>
+
+<span class="c">// strategy 2 · verbatim insertion (free-form prompts, edits)</span>
+<span class="v">"[reference: @code-5 (src/components/HabitCard.tsx)]
+Use this version instead:
+&lt;the user's typed text or edited code&gt;"</span></div>
+
+  <p>
+    The synthesized message refers to the component by <code>@id</code>,
+    so the main agent has full context — it produced that component
+    earlier in the session. The message enters the loop:
+  </p>
+  <ul style="color: var(--fg-dim); line-height: 1.7;">
+    <li><b>stack run mode</b> — server calls <code>claude --resume &lt;session&gt; -p "&lt;synthesized&gt;"</code> to start the next turn.</li>
+    <li><b>stack attach mode</b> — server prints the message into the user's terminal (or pushes via Channels) for the live session to pick up.</li>
+    <li><b>Agent SDK mode</b> (v2) — the wrapper owns the loop; the synthesized message just gets appended.</li>
+  </ul>
+
+  <div class="diagram" style="margin-top: 14px;">
     <div class="caption">Round-trip · user picks an option on a decision component</div>
     <div class="flow-row">
       <div class="step">
         <span class="lbl">1</span>
-        <span class="name">user click</span>
+        <span class="name">user clicks</span>
         <span class="body">opt 2 on <code>@dec-7</code></span>
       </div>
       <div class="step">
         <span class="lbl">2</span>
+        <span class="name">optimistic</span>
+        <span class="body">card marks "picked" immediately</span>
+      </div>
+      <div class="step">
+        <span class="lbl">3</span>
         <span class="name">browser POST</span>
         <span class="body"><code>/api/action</code></span>
       </div>
       <div class="step">
-        <span class="lbl">3</span>
-        <span class="name">server synthesizes</span>
-        <span class="body">"user picked option 2 (manual freeze) for @dec-7"</span>
-      </div>
-      <div class="step">
         <span class="lbl">4</span>
-        <span class="name">re-run</span>
-        <span class="body"><code>claude --resume &lt;id&gt; -p "…"</code></span>
+        <span class="name">server synthesizes</span>
+        <span class="body">user msg referring to <code>@dec-7</code></span>
       </div>
       <div class="step">
         <span class="lbl">5</span>
-        <span class="name">new events</span>
-        <span class="body">flow through normal path</span>
+        <span class="name">queued / sent</span>
+        <span class="body">waits for current turn; then <code>--resume -p</code></span>
       </div>
       <div class="step">
         <span class="lbl">6</span>
-        <span class="name">decision patched</span>
-        <span class="body">existing card marks "picked"</span>
+        <span class="name">new components</span>
+        <span class="body">flow through prefilter + interface agent</span>
       </div>
     </div>
   </div>
 
   <p>
-    The key bit in step 3: the synthesized user message <i>references the
-    component by id</i> (<code>@dec-7</code>). The model already saw that
-    component in its history (it produced it), so it has the context to
-    react. This is how <b>old components stay live</b> across turns —
-    nothing about them is read-only because the conversation can always
-    re-touch them by id.
+    Two subtleties: <b>old components stay live</b> across turns —
+    nothing about them is read-only, because the conversation can
+    always re-touch them by id. And <b>actions queue by default</b> —
+    clicking during an in-progress turn doesn't interrupt; the action
+    is held until the turn settles and becomes the next user message.
   </p>
 
   <!-- ============================================================ -->
@@ -826,36 +978,41 @@
 
   <!-- ============================================================ -->
   <h2><span class="num">9</span><b>What ships in what order</b></h2>
-  <div class="flow-row" style="grid-template-columns: repeat(6, 1fr); gap: 14px;">
+  <div class="flow-row" style="grid-template-columns: repeat(7, 1fr); gap: 14px;">
     <div class="step">
       <span class="lbl">phase 0</span>
-      <span class="name">mapper spike</span>
-      <span class="body">stream-json → print "would render"</span>
+      <span class="name">prefilter spike</span>
+      <span class="body">stream-json → baseline components</span>
     </div>
     <div class="step">
       <span class="lbl">phase 1</span>
-      <span class="name">MVP end-to-end</span>
-      <span class="body">live page · built-in tool mapping</span>
+      <span class="name">MVP page</span>
+      <span class="body">live in browser · prefilter only</span>
     </div>
     <div class="step">
       <span class="lbl">phase 2</span>
-      <span class="name">render_* MCP</span>
-      <span class="body">bespoke components</span>
+      <span class="name">interface agent</span>
+      <span class="body">Haiku + component vocabulary · the unlock</span>
     </div>
     <div class="step">
       <span class="lbl">phase 3</span>
-      <span class="name">project page</span>
-      <span class="body">aggregation across sessions</span>
+      <span class="name">bidirectional</span>
+      <span class="body">components → actions → session inputs</span>
     </div>
     <div class="step">
       <span class="lbl">phase 4</span>
-      <span class="name">round-trip</span>
-      <span class="body">component actions → re-prompt</span>
+      <span class="name">project page</span>
+      <span class="body">cross-session aggregation</span>
     </div>
     <div class="step">
       <span class="lbl">phase 5</span>
+      <span class="name">explicit MCP</span>
+      <span class="body">main agent calls render_* directly</span>
+    </div>
+    <div class="step">
+      <span class="lbl">phase 6</span>
       <span class="name">ship</span>
-      <span class="body">single binary · snapshot export</span>
+      <span class="body">single binary · Agent SDK loop</span>
     </div>
   </div>
 
@@ -875,17 +1032,19 @@
 
   // edges: from-key, to-key, color, label, curve
   const edges = [
-    ["user",    "claude",   "accent", "prompts",            -10],
-    ["user",    "jsonl-in", "accent", "or interactive CLI",  10],
-    ["claude",  "wrapper",  "",       "stream-json",          0],
-    ["mcp",     "wrapper",  "blue",   "render_* calls",       0],
-    ["jsonl-in","wrapper",  "",       "tail jsonl",           0],
-    ["wrapper", "store",    "green",  "append",               0],
-    ["wrapper", "server",   "",       "mutations",            0],
-    ["store",   "server",   "green",  "replay on connect",    0],
-    ["server",  "browser",  "purple", "SSE /events",          0],
-    ["browser", "server",   "accent", "POST /api/action",    15],
-    ["server",  "claude",   "accent", "--resume -p",         15],
+    ["user",      "claude",   "accent", "prompts",             -10],
+    ["user",      "jsonl-in", "accent", "or interactive CLI",   10],
+    ["claude",    "prefilter","",       "events",                0],
+    ["jsonl-in",  "prefilter","",       "events",                0],
+    ["mcp",       "iface",    "blue",   "explicit scaffolds",    0],
+    ["prefilter", "iface",    "",       "baseline",              0],
+    ["iface",     "wrapper",  "purple", "final descriptors",     0],
+    ["wrapper",   "store",    "green",  "append",                0],
+    ["wrapper",   "server",   "",       "mutations",             0],
+    ["store",     "server",   "green",  "replay on connect",     0],
+    ["server",    "browser",  "purple", "SSE /events",           0],
+    ["browser",   "server",   "accent", "POST /api/action",     15],
+    ["server",    "claude",   "accent", "synthesized user msg", 25],
   ];
 
   function pos(key) {

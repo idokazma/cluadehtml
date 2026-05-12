@@ -8,18 +8,36 @@
 ## What we're building
 
 A wrapper around Claude Code — call it **`stack`** for now — that turns every
-agent session into a live HTML page of interactive components. Each tool call,
-text reply, and tool result becomes (or updates) a component in a single
-stacked document. The document is the session. Sessions belong to a project
-(the cwd / git root). A separate page rolls all the sessions of a project up
-into a living briefing.
+agent session into a live HTML page of interactive components. Two agents are
+involved:
+
+- The **main agent** is the Claude Code session the user actually asked
+  for — it reads files, runs commands, edits code, answers questions.
+  Its outputs are not text, exactly: they're agent events (tool calls,
+  tool results, content blocks).
+- The **interface agent** sits beside it. It watches the main agent's
+  event stream and decides, for each chunk, what HTML component best
+  expresses it: a plan, a diff, a streaming terminal, a decision card,
+  a chart, a slider playground, a small diagram, a custom HTML snippet.
+  It is *not* a static lookup table — it is a model call with a
+  vocabulary of components.
+
+The interface agent's decisions become append-only mutations to a single
+HTML document — one page per session, a stack of interactive components
+that grows as the session goes. The same page is **bidirectional**: when
+the user clicks a button in a component, picks an option, drags a slider,
+or hits "copy as prompt", that interaction is synthesized into a message
+that flows back into the main agent's session. The page is both display
+and input.
 
 Three concrete deliverables:
 
 1. **A small wrapper** that launches `claude` (or attaches to a running one),
-   observes every event, and emits component mutations.
+   observes every event, runs them through the interface agent, and emits
+   component mutations.
 2. **A local HTTP server + browser page** that subscribes to those mutations
-   via SSE and renders/updates the stack.
+   via SSE and renders/updates the stack — and POSTs user interactions back
+   as session inputs.
 3. **A persistence + aggregation layer** that stores each session as a
    replayable mutation log and generates a project page from the set.
 
@@ -73,10 +91,17 @@ project's cwd; no extra registration step.
 
 ---
 
-## The mapping problem — turning agent events into components
+## The rendering problem — an interface agent, not a lookup table
 
-This is the heart of the system. The mapping is the contract between the
-agent's stream and the page.
+The main agent doesn't pick its own UI. It just does the work it was
+asked to do. Beside it runs a smaller, faster, cheaper **interface
+agent** whose only job is to decide: *for this chunk of the main
+agent's output, which component best expresses it?*
+
+This is **not** a deterministic mapping table. The same tool call
+can become different components in different contexts — and many of
+the most useful components (decision cards, charts, diagrams) come
+from *text* the main agent wrote, not from a tool call at all.
 
 ### Stream events we consume
 
@@ -87,62 +112,212 @@ From `claude -p --output-format stream-json` (and the JSONL format):
 - `tool_result` — keyed by `tool_use_id`
 - `result` — final outcome
 
-### Heuristic mapping for built-in tools
+### The interface agent
 
-| Tool call | Component | Lifecycle |
-| --- | --- | --- |
-| `TodoWrite` | `plan` | Mutate in place when called again with a new todo list (match by stable component id, not list contents) |
-| `Read` | `file-viewer` | Inline with line range |
-| `Edit` / `Write` / `NotebookEdit` | `diff` | Show before/after; reversible affordance |
-| `Bash` | `terminal` (streaming) | Append output lines as they arrive |
-| `Glob` / `Grep` | `search-results` | List with file:line + snippet |
-| `WebFetch` / `WebSearch` | `web-result` | Title + summary + link |
-| `Task` (subagent) | `subagent` (collapsible, contains a nested stack) | The recursive case |
-| Unknown / MCP tool | `tool` (generic fallback) | Name + params + collapsible result |
+A separate model call (good fit: Haiku 4.5) wraps the live stream. It
+receives a small window of events at a time — say, every settled chunk:
+a complete `text` block, a `tool_use` + its `tool_result`, an
+`assistant` turn boundary — and outputs a list of component descriptors.
+Its system prompt holds the **component vocabulary**: a versioned schema
+of every component type the page can render. Its job is to pattern-match
+each chunk to the best fit.
 
-Text blocks from `assistant` render as a `note` — unless the text is
-*mostly* a fenced code block, in which case it becomes a `code` component.
-
-### Bespoke components via MCP
-
-The mapping above covers Claude's standard toolbox, which gets us most of the
-demo (plan, diff, terminal, search, code, file tree). The interesting
-components from `demo.html` — **decision card, comparison table, design
-exploration, theme playground, sparkline stats, schema diagram, deploy
-progress** — aren't standard tool calls. They need a way for the model to
-*ask for* a specific component to render.
-
-We ship an MCP server, **`stack-mcp`**, exposing tools:
+Concretely:
 
 ```
-render_plan(items[])
-render_compare(columns[], rows[])
-render_designs(designs[])
-render_decision(question, options[])
-render_playground(kind, params{})
-render_stats(stats[])
-render_schema(entities[], relations[])
-render_code(filename, lang, code)
-render_html(html_string)           # escape hatch — sandboxed iframe
+incoming:  { kind: "text", text: "There are 3 reasonable ways to
+              handle skipped days:\n1) Auto grace day...\n2) Manual
+              freeze...\n3) Both...\nWhich do you prefer?" }
+
+interface agent output:
+  [
+    { type: "note",     props: { text: "There are 3 reasonable ways..." } },
+    { type: "decision", props: {
+        question: "How should we handle skipped days?",
+        options: [
+          { label: "Auto grace day",   desc: "Every Nth missed day is free, no UI." },
+          { label: "Manual freeze",    desc: "User taps 'freeze' before midnight." },
+          { label: "Both",             desc: "1 auto + 2 manual / month." },
+        ]
+    }}
+  ]
 ```
 
-When the model wants a comparison table or a slider playground, it calls
-one of these. The MCP server is silent on the model side (returns a tiny
-ack like `{"id": "cmp-7"}`); the wrapper sees the tool call, knows the
-schema, and renders the matching component. The model effectively has
-"speak component" as part of its toolbox.
+The main agent wrote prose. The interface agent saw "this is asking the
+user to choose among options" and produced a `decision` component that
+gives the user buttons instead of asking them to type back which option
+they want.
 
-This is the same idea Anthropic's "Channels" feature is hinting at, but
-applied in the other direction — model → UI, not UI → model.
+This is the leverage of the design. The main agent gets to be natural
+and verbose; the interface agent shapes its output into something the
+user can interact with.
 
-### Plain text fallback
+### Component vocabulary
 
-When the model emits text that doesn't fit a component, render it as a
-`note`. Honour the existing markdown habits Claude already has, but treat
-markdown as a fallback medium, not the default. (This matches the
-philosophy: components first, markdown if no component fits.)
+The interface agent's prompt includes a strict, versioned list of the
+component types it is allowed to emit. Each entry has:
+
+- name (`decision`, `plan`, `diff`, `chart`, `playground`, `compare`,
+  `designs`, `schema`, `code`, `tree`, `terminal`, `tests`, `commits`,
+  `deploy`, `stats`, `grep`, `note`, …)
+- the prop schema (JSON)
+- when to use it (one or two sentences)
+- when *not* to use it
+
+When none of the components in the vocabulary fit, there is an
+**`html` escape hatch**: the agent can emit raw HTML for a one-off
+component, which is rendered inside a sandboxed iframe with strict
+CSP. This is how diagrams, plots, and unusual visualizations land —
+the model improvises a small chunk of HTML/SVG.
+
+### Three layers of decision
+
+In practice, the interface agent's job sits on top of two cheaper
+layers, used together to keep latency and cost down:
+
+1. **Fast deterministic prefilters.** Some events almost always have
+   the same component shape: a `Bash` tool_use is a `terminal`, an
+   `Edit` is a `diff`, a `Read` is a `file-viewer`. These get a
+   pre-mapped descriptor immediately, so the user sees something
+   render without waiting on another model call.
+
+2. **Interface agent overrides + enriches.** The interface agent runs
+   in parallel. It can:
+   - *Replace* a prefiltered descriptor (e.g. "this terminal output
+     contains JSON — render it as a tree instead").
+   - *Enrich* with extra props (e.g. extract a sparkline of numbers
+     from a tool_result and add a `chart` component beside the
+     existing `terminal`).
+   - *Insert* new components the prefilter missed entirely (e.g. the
+     `decision` example above, which arises from text).
+
+3. **Explicit model emission.** Sometimes the main agent knows
+   exactly what UI it wants. It can call a `render_*` MCP tool to
+   request a specific component without going through the interface
+   agent's interpretation. Used sparingly — mostly for rich
+   interactive scaffolds (`render_playground`, `render_designs`)
+   where it knows the structure.
+
+The interface agent is the smart layer in the middle: the deterministic
+layer is dumb-and-instant, the explicit layer is the model's
+self-authored UI, and the interface agent fills the gap where
+intelligence is needed but the main agent didn't pre-author the form.
+
+### Why a separate agent
+
+- **The main agent stays natural.** It doesn't have to clutter its
+  own thinking with UI choices. It writes prose, runs tools, produces
+  diffs. The interface agent worries about how the user sees it.
+- **The interface agent stays focused.** Its prompt is small,
+  cacheable, mostly the component vocabulary. Latency is low. Cost
+  per turn is small.
+- **Failure mode is graceful.** If the interface agent times out or
+  errors, the prefilter still produced a usable component. Worst case
+  is "less interactive than it could have been," never "broken."
+- **The vocabulary can evolve.** Adding a new component type is a
+  vocabulary entry, not a code patch in the wrapper.
 
 ---
+
+## The bidirectional problem — HTML as input, not just output
+
+A component is not display-only. The whole point is that the user can
+*act on it*. The 3-option decision card is the canonical case: instead
+of the user typing "I want option 2", they click a button on the card
+and the system handles the rest.
+
+### What "the user acted on a component" means
+
+Every interactive component declares one or more **actions**. An action
+is a typed event the page POSTs back to the server when the user does
+something. Examples:
+
+| Component | User does | Action emitted |
+| --- | --- | --- |
+| `decision` | clicks option *i* | `{ kind: "pick", id: "dec-7", option: 2, label: "Manual freeze" }` |
+| `playground` | drags sliders, clicks "Apply" | `{ kind: "apply", id: "play-3", params: { duration: 280, scale: 1.5 } }` |
+| `compare` | clicks "pick" on a row | `{ kind: "pick", id: "cmp-2", row: 1, option: "IndexedDB" }` |
+| `designs` | clicks a tile | `{ kind: "pick", id: "des-4", choice: "Streak hero" }` |
+| `plan` | toggles a step's checkbox | `{ kind: "toggle", id: "plan-1", step: 3, done: true }` |
+| `diff` | clicks "revert" | `{ kind: "revert", id: "diff-9", file: "src/charge.ts" }` |
+| `code` | clicks "edit & re-prompt" with new text | `{ kind: "edit", id: "code-5", new_code: "…" }` |
+| any | right-click → "ask about this" + types text | `{ kind: "ask", id: "<any>", text: "<user prompt>" }` |
+
+Actions go to `POST /api/action`. The server's job is to **synthesize
+a follow-up user message** that makes the action legible to the main
+agent, then re-enter the agent loop with that message.
+
+### How an action becomes a session input
+
+Two synthesis strategies, picked by the server based on the action kind:
+
+1. **Reference-and-narrate.** The synthesized message refers to the
+   acted-on component by id and describes the action plainly:
+
+   ```
+   [interaction with @dec-7]
+   Picked option 2 of 3: "Manual freeze — User taps 'freeze today'
+   before midnight. Limited per month."
+   ```
+
+   The main agent has produced `@dec-7` earlier in the session, so it
+   already has the context. Used for decisions, picks, toggles,
+   reverts.
+
+2. **Verbatim insertion.** For "edit and re-prompt" or "ask about
+   this", the user's text is the message — but prefixed with a small
+   reference block:
+
+   ```
+   [reference: @code-5 (src/components/HabitCard.tsx)]
+   <user's prompt>
+   ```
+
+   Used for free-form follow-ups.
+
+### Routing back into the agent
+
+How the synthesized message enters the running session depends on the
+ingest mode:
+
+- **`stack run`** mode: the wrapper holds the `claude` subprocess. The
+  cleanest path is to call `claude --resume <id> -p "<synthesized>"`
+  to start a new turn from the existing session id. This costs one
+  extra spawn per interaction but is robust.
+- **`stack attach`** mode: we don't control the process. We can either
+  print the message into the user's terminal and let them hit Enter
+  (lo-fi), or use Claude Code's Channels feature to push the message
+  into the session as a notification.
+- **Agent SDK** mode (v2): the wrapper owns the agent loop directly
+  and just appends a user message — no process restart.
+
+### Interruption semantics
+
+What if the user clicks a button on `@dec-7` *while the main agent is
+still mid-turn* doing something unrelated? Three options:
+
+- **Queue.** Hold the action until the current turn settles; insert
+  it as the next user message.
+- **Interrupt.** Stop the main agent and start a new turn immediately.
+- **Side-channel.** Inject the action as an out-of-band system note
+  the main agent picks up at the next decision point.
+
+We default to **Queue** for v1 (simplest, no interruption hassles).
+Interrupt and side-channel become opt-ins later.
+
+### What the user sees
+
+When an action fires, the component immediately reflects the change
+optimistically (e.g. `decision` marks the picked option). The
+synthesized message appears in the page as a `prompt`-style chip,
+just like a typed user prompt would. The main agent's response (new
+components) appears below it, exactly as if the user had typed.
+
+The end-to-end shape: **the page is now an editor for the session.**
+Components are not just output. Every interactive affordance is an
+input. The conversation is no longer just text in / text out — it is
+*structured operations on a stack of stateful objects*, where typing
+remains available as a fallback.
 
 ## The rendering & update problem
 
@@ -197,58 +372,81 @@ hidden state. Easy to snapshot, share, diff.
 
 ## Build phases
 
-### Phase 0 — Mapper spike *(1–2 days)*
+### Phase 0 — Prefilter spike *(1–2 days)*
 
-Goal: prove that the stream-json → component mapping is sound.
+Goal: prove the deterministic prefilter layer is sound — what gets a
+guaranteed component shape without any model in the loop.
 
 - Spawn `claude -p --output-format stream-json --verbose --include-partial-messages` against a real repo with a real task.
-- Pipe events into a tiny mapper that prints `would render: plan(...) / would render: diff(...) / would render: terminal(...)`.
-- Run against 5–10 representative prompts, eyeball the output, refine the mapping table.
+- Pipe events into a tiny prefilter that prints `would render: plan(...) / would render: diff(...) / would render: terminal(...)` for the tools where the answer is always the same.
+- Mark text blocks as `note (prefilter)` for now.
+- Run against 5–10 representative prompts, eyeball the output, refine the table of "always-the-same" tool mappings.
 
-**Deliverable:** a transcript of "what components this real session would have produced." No UI yet. This shakes out the mapping decisions before we commit to a page architecture.
+**Deliverable:** a transcript of "what components this real session would have produced from prefiltering alone." Establishes the baseline the interface agent will improve on.
 
-### Phase 1 — MVP: live session in the browser *(3–5 days)*
+### Phase 1 — MVP: prefilter only, live in the browser *(3–5 days)*
 
-- `stack run "<prompt>"` launches `claude`, runs the mapper, writes `.stack/sessions/<id>.events.jsonl`.
+- `stack run "<prompt>"` launches `claude`, runs the prefilter, writes `.stack/sessions/<id>.events.jsonl`.
 - Local Node server: SSE stream of mutations, replays the log on connect.
-- Vanilla-JS page (the existing `demo.html` codebase, pruned to the components from the heuristic map).
+- Vanilla-JS page (the existing `demo.html` codebase, pruned to the components from the prefilter table).
 - Components in scope: `prompt`, `note`, `plan`, `diff`, `terminal`, `search`, `web-result`, `tool` (generic), `code`.
 
-**Deliverable:** you run `stack run "fix the failing test in src/payments"`, your browser opens, and watches the session play out as a live component stack. The CLI's text scroll is no longer load-bearing.
+**Deliverable:** you run `stack run "fix the failing test in src/payments"`, your browser opens, and watches the session play out as a live component stack — but every text block is still a `note`. The richer components come next.
 
-### Phase 2 — Bespoke components via MCP *(2–3 days)*
+### Phase 2 — Interface agent: smart rendering *(4–7 days)*
 
-- Implement `stack-mcp` with `render_decision`, `render_compare`, `render_playground`, `render_designs`, `render_stats`, `render_schema`, `render_html`.
-- Register it with Claude Code in `.stack/mcp.json`. Add a system-prompt nudge: "When the user would benefit from picking, comparing, tuning, or exploring, prefer a `render_*` tool over markdown."
-- Real session against a real task that ends up using two or three of these.
+Goal: a real model call in the rendering loop, with a component
+vocabulary. This is the unlock.
 
-**Deliverable:** the more interesting components from the mockup, real.
+- Define the component vocabulary as a JSON schema (component types + props + when-to-use).
+- Implement the interface agent: a Haiku 4.5 call that takes a settled chunk of events and returns 1+ component descriptors. Heavy use of prompt caching against the vocabulary prompt.
+- Wire it in: prefilter runs first (instant), interface agent runs in parallel and can `replace`, `enrich`, or `insert` descriptors before they're committed to the log.
+- Add the `html` escape hatch: the interface agent can emit a small raw-HTML chunk for one-offs (charts, diagrams, plots). Rendered into a sandboxed iframe.
+- Components newly reachable: `decision`, `compare`, `designs`, `chart`, `schema`, `playground` (when synthesized from text), and arbitrary inline HTML/SVG for plots and diagrams.
 
-### Phase 3 — Project page *(2–3 days)*
+**Deliverable:** the same prompt that produced "3 reasonable ways… which do you prefer?" as plain text now renders a clickable `decision` card. Numeric tool results sometimes get a small sparkline beside the terminal. Code-explanation prose sometimes gets a flow diagram.
+
+### Phase 3 — Bidirectional: components are inputs *(4–7 days)*
+
+The hard part: every interactive affordance becomes a session input.
+
+- Define the `action` schema (one per component type). Each component declares which actions it can emit.
+- `POST /api/action` synthesizes a follow-up user message via the two strategies (reference-and-narrate / verbatim insertion).
+- Routing back into the session: `--resume <id> -p "<synthesized>"` in `stack run` mode; printed-to-terminal in `stack attach` mode for v1.
+- Queue semantics: pending actions are held until the current turn settles, then injected as the next user message.
+- Optimistic UI: the component reflects the action immediately; the model's response components appear below.
+
+**Deliverable:** clicking "pick" on a decision card actually causes the main agent to act on the picked option. Dragging sliders + "Apply" sends settings back. Right-click "ask about this" round-trips.
+
+### Phase 4 — Project page *(2–3 days)*
 
 - `stack open` (or `stack` with no args) serves the project page.
 - Generated from `.stack/index.json` (rebuilt from session logs) + live git state (`git status`, `gh pr list`, `gh run list`).
 - Sessions grouped by day, "needs attention" pulled from open decisions and failing tests in recent sessions, in-flight from branches/PRs.
+- The project page itself is rendered via the same component vocabulary; the interface agent can be asked to synthesize a "what changed since you were here" banner from the new session logs.
 
 **Deliverable:** the `project.html` mockup, real.
 
-### Phase 4 — Interactive components close the loop *(3–5 days)*
+### Phase 5 — Explicit model emission via MCP *(2–3 days)*
 
-The hard part: when the user clicks a "pick" button on a decision card, or drags a slider and hits "copy as prompt", or right-clicks "ask about this" — the response has to make it back into the running session.
+For cases the main agent knows exactly what UI it wants — rare,
+high-leverage scaffolds like animation playgrounds or structured
+design explorations — let it call render_* tools directly.
 
-- Right-click "ask about this" → POSTs to `/api/prompt` with `@<id> <user text>` and an attached snapshot of the referenced component. Backend forwards via `--resume <session> -p "<prompt>"`.
-- Component actions (picking a decision option, accepting a plan, applying playground settings) → POSTs to `/api/action`, which synthesizes a follow-up user message like *"the user picked option 2: 'Manual streak-freeze'"*.
-- Either branch the conversation with `--resume` or feed live via stdin (only available with `stack attach` mode in v1).
+- Implement `stack-mcp` with `render_playground`, `render_designs`, and the others where the main agent has unique authority to set the structure.
+- Register it with Claude Code in `.stack/mcp.json`.
+- The mutations from these calls flow through the same log + SSE as everything else.
 
-**Deliverable:** the demo's right-click and `Copy as prompt` flows actually round-trip.
+**Deliverable:** when the main agent is asked to "make the streak animation tunable," it explicitly calls `render_playground` and the resulting component skips the interface agent's interpretation.
 
-### Phase 5 — Polish & ship *(1–2 weeks)*
+### Phase 6 — Polish & ship *(1–2 weeks)*
 
 - Single-binary distribution (`bun build` or `pkg`), or `npx stack`.
 - Auto-open browser on `stack run`. Cross-OS.
-- Sandbox `render_html` (iframe with `sandbox=""`, strict CSP).
+- Sandbox the `html` escape hatch (iframe with `sandbox=""`, strict CSP).
 - Self-contained `<id>.snapshot.html` exporter — entire session inlined, no server needed to view.
 - Multi-session aware project page; subagent panels.
+- Migrate `stack run` to the Agent SDK so bidirectional inputs no longer need `--resume` (clean live loop).
 
 ---
 
@@ -259,50 +457,65 @@ The hard part: when the user clicks a "pick" button on a decision card, or drags
                        │  the user                                       │
                        │  - browser (session.html, project.html)         │
                        │  - terminal (optional; for `stack attach` mode) │
-                       └────────────────────┬────────────────────────────┘
-                                            │  HTTP + SSE
-                                            ▼
-                              ┌──────────────────────────┐
-                              │  stack server (Node)     │
+                       └──┬──────────────────────────────────────────▲───┘
+                          │  POST /api/action,                       │
+                          │  POST /api/prompt                        │  SSE
+                          ▼                                          │
+                              ┌──────────────────────────┐           │
+                              │  stack server (Node)     │───────────┘
                               │  - serves pages          │
                               │  - SSE /events           │
-                              │  - POST /api/prompt      │
-                              │  - POST /api/action      │
+                              │  - POST /api/{action,prompt}
+                              │  - synthesizes session inputs
                               └────────────┬─────────────┘
-                                           │
-                  ┌────────────────────────┴───────────────────────────┐
+                                           │ inject user msg
+                                           ▼
+                  ┌────────────────────────────────────────────────────┐
                   │                                                    │
                   ▼                                                    ▼
    ┌──────────────────────────┐                      ┌──────────────────────────────┐
    │   stack run              │                      │   stack attach               │
    │   spawns:                │                      │   no spawn; tails file:      │
-   │     claude -p            │                      │     ~/.claude/projects/      │
-   │     --output-format      │                      │       <hash>/<id>.jsonl      │
-   │     stream-json          │                      │                              │
+   │     claude -p …          │                      │     ~/.claude/projects/      │
+   │     stream-json          │                      │       <hash>/<id>.jsonl      │
    └──────────────┬───────────┘                      └──────────────┬───────────────┘
                   │                                                 │
                   └────────────┬────────────────────────────────────┘
+                               │  events
                                ▼
-                ┌────────────────────────────────┐
-                │  the mapper                    │
-                │  stream-json/jsonl event  ───► │ component mutation event
-                │  - heuristic table             │ { op, id, type, props, ... }
-                │  - stack-mcp render_* calls    │
-                └─────────────┬──────────────────┘
-                              │
+                ┌─────────────────────────────────┐
+                │  prefilter (deterministic)      │   "Bash → terminal" cases
+                │  fast, always-applicable        │   for instant feedback
+                └─────────────┬───────────────────┘
+                              │  baseline descriptor
                               ▼
-        ┌────────────────────────────────────────┐
-        │  .stack/sessions/<id>.events.jsonl     │  ← single source of truth.
-        │  append-only; replay = page state.     │     page is a fold over this.
-        └────────────────────────────────────────┘
+                ┌─────────────────────────────────┐
+                │  interface agent  (Haiku 4.5)   │   smart shaping:
+                │  vocabulary = component schema  │   replace / enrich / insert
+                │  prompt-cached system prompt    │   incl. `html` escape hatch
+                └─────────────┬───────────────────┘
+                              │  final component descriptors
+                              ▼
+                ┌────────────────────────────────────────┐
+                │  .stack/sessions/<id>.events.jsonl     │  ← single source of truth.
+                │  append-only; replay = page state.     │     page is a fold over this.
+                └─────────────┬──────────────────────────┘
+                              │  + push live via SSE
+                              ▼
+                            browser
 ```
 
 Two side channels:
 
 - **`stack-mcp` (MCP server)** — registered with Claude Code as a normal MCP
-  server. Receives `render_*` tool calls. Doesn't talk to the page directly;
-  emits events that the mapper picks up alongside the main stream.
-- **User actions** — POSTs from the page that synthesize follow-up prompts.
+  server. Receives `render_*` tool calls when the main agent explicitly
+  wants a specific scaffold. These tool_use events flow through the same
+  pipeline but skip the interface agent's interpretation (the main agent
+  has already specified the structure).
+- **User actions** — POSTs from the page. The server synthesizes a
+  follow-up user message and routes it back into the session
+  (`--resume -p` in run mode, terminal echo or Channels in attach mode).
+  Queued behind the current turn by default.
 
 ---
 
@@ -315,8 +528,11 @@ Two side channels:
 | **Frontend** | Vanilla JS, the demo's `el()` + `Map<id, block>` pattern | Components are independent; framework overhead would be pure cost |
 | **Transport** | SSE for server→browser; HTTP POST for browser→server | One-way streaming is the natural shape; the return channel is rare and discrete |
 | **Storage** | Append-only JSONL of component mutations per session | Diffable, tail-friendly, trivial to back up, snapshot is just a fold |
-| **Bespoke components** | MCP server with `render_*` tools | Lets the model "speak components" without inventing a new IO channel; reuses Claude Code's existing tool-use mechanism |
-| **HTML escape hatch** | `render_html(string)` rendered into a sandboxed iframe with strict CSP | Lets the model improvise without putting arbitrary code in the host page |
+| **Rendering decisions** | Interface agent (Haiku 4.5) on top of a deterministic prefilter | Static tables get the obvious cases instantly; an agent gives us the smart cases (decision cards from prose, charts from numeric output, diagrams from explanations) without bloating the main agent's prompt |
+| **Component vocabulary** | Versioned JSON schema in the interface agent's prompt; cached via prompt caching | Adding a component is a vocabulary edit, not a code patch; cache keeps latency and cost low |
+| **Explicit components** | `stack-mcp` with a few `render_*` tools for scaffolds the main agent knows how to author directly | Avoids round-tripping rich structures (animation playgrounds, design grids) through the interface agent's interpretation |
+| **HTML escape hatch** | Interface agent can emit raw HTML/SVG, rendered into a sandboxed iframe with strict CSP | Lets the model improvise charts and diagrams without putting arbitrary code in the host page |
+| **Bidirectional inputs** | Per-component `action` schema → POST → synthesized user message → re-enter the loop | The page becomes an editor for the session — every interactive affordance is an input |
 | **Multi-session** | Concurrent JSONL files in `.stack/sessions/` | Append is atomic; project page picks them up by listing the dir |
 
 ---
@@ -396,10 +612,35 @@ Things that get cheap once the foundation is in place:
 
 ---
 
+## A few open questions specific to the interface-agent design
+
+- **Latency budget.** The interface agent adds a model call per
+  settled chunk. Haiku 4.5 with prompt caching should keep this in
+  the ~200–500 ms range; for very chatty sessions we may need to
+  batch (debounce settled chunks) or run only on chunks where the
+  prefilter is low-confidence.
+
+- **Cost per session.** Most of the interface agent's input is the
+  cacheable vocabulary prompt. Per-chunk cost is small (the new
+  event + ~hundreds of tokens of recent context). For a long
+  session with hundreds of chunks, this is still cents — fine.
+
+- **Drift.** The interface agent can hallucinate components or
+  produce schema-invalid props. We validate every descriptor
+  against the vocabulary's JSON schema before committing; invalid
+  ones fall back to the prefilter's baseline.
+
+- **Determinism for tests.** Snapshot-testing pages becomes harder
+  when an agent is making choices. We pin the interface agent to a
+  fixed model + temperature 0 and golden-master the descriptor
+  stream rather than the final HTML.
+
 ## What to build first, in one sentence
 
-A **mapper spike** that pipes `claude -p --output-format stream-json` into a
-script that prints "would render: plan / would render: diff / would render:
-terminal" — because the entire design hinges on whether that mapping table
-holds up against real sessions, and we can test it without writing a single
-line of UI.
+A **prefilter spike** that pipes `claude -p --output-format stream-json`
+into a script that prints "would render: terminal / would render: diff /
+would render: plan" for the always-the-same cases, leaving everything
+else as `note (prefilter)` — because once that baseline holds, every
+later phase (interface agent, bidirectional inputs, project page) is an
+additive layer on top of a working stream, and we can ship and learn at
+each step.
