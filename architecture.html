@@ -1,0 +1,1062 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>How it works — Claude Code stack interface</title>
+<style>
+  :root {
+    --bg: #0e0f12;
+    --bg-2: #15171c;
+    --bg-3: #1c1f26;
+    --bg-4: #232730;
+    --line: #262a33;
+    --line-2: #333845;
+    --fg: #e6e7ea;
+    --fg-dim: #9097a3;
+    --fg-mute: #5b6272;
+    --accent: #d97757;
+    --accent-soft: #d9775722;
+    --green: #5fb87a;
+    --red: #e26a6a;
+    --yellow: #d6b14a;
+    --blue: #6b9fff;
+    --purple: #a78bfa;
+    --pink: #f06292;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: var(--sans); font-size: 14px; line-height: 1.55;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; }
+
+  /* hero */
+  header {
+    border-bottom: 1px solid var(--line);
+    padding: 14px 24px;
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg-2);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .logo { width: 22px; height: 22px; border-radius: 5px; background: var(--accent); display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; }
+  .title { font-weight: 600; }
+  .crumb { color: var(--fg-dim); font-size: 12px; }
+  .spacer { flex: 1; }
+  nav { display: flex; gap: 4px; }
+  nav a {
+    color: var(--fg-dim); font-size: 12px; text-decoration: none;
+    padding: 5px 10px; border-radius: 6px;
+  }
+  nav a:hover { color: var(--fg); background: var(--bg-3); }
+
+  /* layout */
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 {
+    font-size: 20px; margin: 36px 0 12px; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2 .num {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: var(--accent-soft); color: var(--accent);
+    display: inline-grid; place-items: center;
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+  }
+  h3 { font-size: 15px; margin: 18px 0 8px; }
+  p { color: var(--fg-dim); margin: 8px 0; line-height: 1.6; max-width: 760px; }
+  p b, h2 b { color: var(--fg); }
+  .lede { font-size: 15px; color: var(--fg-dim); max-width: 720px; line-height: 1.65; }
+
+  code, kbd {
+    font-family: var(--mono); font-size: 12.5px;
+    background: var(--bg-3); padding: 1px 6px; border-radius: 4px;
+    color: var(--fg); border: 1px solid var(--line);
+  }
+  pre {
+    background: #08090b; color: #cdd1d8;
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; font-family: var(--mono); font-size: 12.5px;
+    overflow-x: auto; line-height: 1.55;
+  }
+  pre .kw { color: #c792ea; }
+  pre .str { color: #c3e88d; }
+  pre .com { color: #5b6272; font-style: italic; }
+  pre .num { color: #f78c6c; }
+  pre .ty  { color: #ffcb6b; }
+
+  /* boxed diagrams */
+  .diagram {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px;
+    margin: 14px 0;
+    overflow: hidden;
+  }
+  .diagram .caption {
+    color: var(--fg-mute); font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+
+  /* node boxes inside SVG-ish layouts */
+  .node {
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    border-radius: 9px;
+    padding: 9px 12px;
+    display: inline-flex; flex-direction: column;
+    text-align: left;
+    transition: border-color 160ms, box-shadow 160ms;
+    cursor: default;
+    min-width: 130px;
+  }
+  .node:hover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .node .nt { color: var(--fg-mute); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .node .nn { color: var(--fg); font-weight: 600; font-size: 13px; margin: 2px 0 0; }
+  .node .nd { color: var(--fg-dim); font-size: 11.5px; margin-top: 4px; }
+  .node.user   { border-color: #4a3a26; background: #2a1f12; }
+  .node.user .nn { color: #e8c997; }
+  .node.claude { border-color: #4a3024; }
+  .node.claude .nn { color: var(--accent); }
+  .node.mcp    { border-color: #2a3a4a; background: #14223a; }
+  .node.mcp .nn { color: var(--blue); }
+  .node.store  { border-color: #2a4a3a; background: #16241c; }
+  .node.store .nn { color: var(--green); }
+  .node.browser { border-color: #3a2a4a; background: #1f1a2e; }
+  .node.browser .nn { color: var(--purple); }
+  .node.code { font-family: var(--mono); font-size: 11.5px; }
+
+  /* big-picture grid layout */
+  .arch {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto auto auto auto;
+    gap: 70px 40px;
+    padding: 12px 6px;
+  }
+  .arch svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .arch .cell { display: flex; justify-content: center; align-items: center; }
+
+  /* flow rows (horizontal step diagrams) */
+  .flow-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    position: relative;
+    margin: 8px 0;
+  }
+  .step {
+    background: var(--bg-3);
+    border: 1px solid var(--line-2);
+    border-radius: 9px;
+    padding: 10px 12px;
+    position: relative;
+    display: flex; flex-direction: column; gap: 4px;
+    transition: 200ms;
+  }
+  .step:hover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .step .lbl { font-size: 10.5px; color: var(--fg-mute); text-transform: uppercase; letter-spacing: 0.05em; }
+  .step .name { font-weight: 600; font-size: 13px; }
+  .step .body { color: var(--fg-dim); font-size: 12px; }
+  .step .body code { font-size: 11px; padding: 1px 4px; }
+  .step::after {
+    content: "→";
+    position: absolute;
+    right: -16px; top: 50%; transform: translateY(-50%);
+    color: var(--fg-mute); font-size: 18px;
+    z-index: 1;
+  }
+  .step:last-child::after { content: ""; }
+  .step.highlight { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+  /* event sample */
+  .event-sample {
+    background: #08090b;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #cdd1d8;
+    border: 1px solid var(--line);
+    margin: 8px 0;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .event-sample .k { color: #82aaff; }
+  .event-sample .v { color: #c3e88d; }
+  .event-sample .c { color: var(--fg-mute); }
+
+  /* mapping table */
+  .mapping {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .mapping table { width: 100%; border-collapse: collapse; }
+  .mapping th, .mapping td {
+    padding: 9px 14px; text-align: left; border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .mapping th {
+    background: var(--bg-3); color: var(--fg-dim);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+  .mapping tr:last-child td { border-bottom: 0; }
+  .mapping tr:hover td { background: #1c1f2680; }
+  .mapping code { background: var(--bg-3); }
+  .mapping .arrow { color: var(--fg-mute); }
+  .mapping .kind {
+    display: inline-block; font-family: var(--mono); font-size: 11.5px;
+    background: var(--bg-3); color: var(--fg);
+    padding: 2px 7px; border-radius: 4px;
+  }
+  .mapping .kind.plan    { background: #d9775733; color: var(--accent); }
+  .mapping .kind.diff    { background: #5fb87a33; color: var(--green); }
+  .mapping .kind.term    { background: #6b9fff33; color: var(--blue); }
+  .mapping .kind.search  { background: #d6b14a33; color: var(--yellow); }
+  .mapping .kind.code    { background: #a78bfa33; color: var(--purple); }
+  .mapping .kind.web     { background: #f0629233; color: var(--pink); }
+
+  /* tabs for the flow walkthrough */
+  .tabs {
+    display: flex; gap: 4px; margin: 12px 0 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .tab {
+    background: transparent; border: 0; color: var(--fg-dim);
+    padding: 8px 14px; cursor: pointer; font-size: 13px;
+    border-bottom: 2px solid transparent;
+    transition: 160ms;
+  }
+  .tab:hover { color: var(--fg); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-pane { display: none; padding: 14px 0; }
+  .tab-pane.active { display: block; }
+
+  /* file layout */
+  .filemap {
+    font-family: var(--mono); font-size: 12.5px;
+    padding: 14px 18px; line-height: 1.7;
+    color: var(--fg-dim);
+    background: var(--bg-3);
+    border-radius: 8px;
+    border: 1px solid var(--line);
+  }
+  .filemap b { color: var(--fg); }
+  .filemap .c { color: var(--fg-mute); }
+
+  /* timeline (sequence diagram-ish) */
+  .seq {
+    display: grid;
+    grid-template-columns: 130px 130px 130px 130px 130px;
+    gap: 0;
+    margin: 16px 0;
+    position: relative;
+  }
+  .seq .lane {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 8px;
+    border-right: 1px dashed var(--line);
+  }
+  .seq .lane:last-child { border-right: 0; }
+  .seq .head {
+    background: var(--bg-3); border: 1px solid var(--line-2);
+    border-radius: 7px; padding: 6px 10px; font-size: 11.5px;
+    font-weight: 600; min-width: 100%;
+    text-align: center;
+  }
+  .seq .msg {
+    background: var(--accent-soft); color: var(--accent);
+    border: 1px solid #4a3024; border-radius: 6px;
+    padding: 5px 8px; font-family: var(--mono); font-size: 11px;
+    margin-top: 8px; text-align: center;
+    grid-column: span 2; min-width: 0;
+  }
+  .seq-grid {
+    display: grid; gap: 6px;
+    grid-template-columns: repeat(5, 130px);
+  }
+  .seq-grid .row {
+    display: contents;
+  }
+  .seq-msg {
+    background: var(--bg-3); border: 1px solid var(--line-2);
+    border-radius: 6px;
+    padding: 5px 9px; font-size: 11.5px;
+    color: var(--fg);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .seq-msg::before {
+    content: "▸"; color: var(--accent); font-size: 10px;
+  }
+
+  /* component cards (legend) */
+  .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; margin: 10px 0; }
+  .legend .item {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: var(--bg-3); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 12px;
+  }
+  .legend .ic { font-size: 18px; line-height: 1; }
+  .legend .nm { font-weight: 600; font-size: 12.5px; }
+  .legend .ds { color: var(--fg-dim); font-size: 11.5px; margin-top: 2px; }
+
+  /* callout */
+  .callout {
+    border: 1px solid #4a3024;
+    background: linear-gradient(135deg, var(--accent-soft), transparent 60%);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 13px;
+    color: var(--fg);
+  }
+  .callout b { color: var(--accent); }
+
+  /* animated arrow used in the big picture */
+  .pulse-line {
+    stroke: var(--line-2); stroke-width: 1.5;
+    fill: none;
+    stroke-dasharray: 4 3;
+    animation: dash 1.6s linear infinite;
+  }
+  .pulse-line.accent { stroke: var(--accent); }
+  .pulse-line.blue   { stroke: var(--blue); }
+  .pulse-line.green  { stroke: var(--green); }
+  .pulse-line.purple { stroke: var(--purple); }
+  @keyframes dash { to { stroke-dashoffset: -14; } }
+  .pulse-arrow { fill: var(--line-2); }
+  .pulse-arrow.accent { fill: var(--accent); }
+  .pulse-arrow.blue   { fill: var(--blue); }
+  .pulse-arrow.green  { fill: var(--green); }
+  .pulse-arrow.purple { fill: var(--purple); }
+  .arrow-label {
+    font-family: var(--mono); font-size: 10.5px;
+    fill: var(--fg-mute);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 1ms !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">C</div>
+  <div>
+    <div class="title">how it works</div>
+    <div class="crumb">flows, dependencies, and how HTML gets produced</div>
+  </div>
+  <div class="spacer"></div>
+  <nav>
+    <a href="#big-picture">big picture</a>
+    <a href="#event-flow">one event</a>
+    <a href="#mapping">mapping</a>
+    <a href="#mcp">render_*</a>
+    <a href="#actions">user actions</a>
+    <a href="#storage">storage</a>
+    <a href="#project">project page</a>
+  </nav>
+</header>
+
+<div class="wrap">
+
+  <h1>How the system works</h1>
+  <p class="lede">
+    A wrapper around Claude Code — call it <b>stack</b> — that turns every
+    agent session into a live HTML page of interactive components. Each
+    tool call, text reply, and tool result becomes (or updates) a component
+    in a single stacked document. This page draws all of that out: the
+    boxes, the lines between them, what flows along each line, and how an
+    HTML component is born from an agent event.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="big-picture"><span class="num">1</span><b>The big picture</b></h2>
+  <p>
+    Six moving parts. The user prompts; Claude Code emits events; a small
+    <b>wrapper</b> ingests those events and decides what to render; the
+    <b>mapper</b> turns each event into a typed mutation; the mutations are
+    appended to a per-session <b>event log</b> and pushed live to the
+    <b>browser</b> over SSE. Hover any box to highlight its connections.
+  </p>
+
+  <div class="diagram">
+    <div class="caption">Architecture · all flows</div>
+
+    <div class="arch" id="arch">
+
+      <!-- row 1: the user -->
+      <div class="cell" style="grid-column: 1 / -1;">
+        <div class="node user" data-key="user">
+          <span class="nt">human</span>
+          <span class="nn">you</span>
+          <span class="nd">types prompts · clicks components · scrolls history</span>
+        </div>
+      </div>
+
+      <!-- row 2: ingest -->
+      <div class="cell">
+        <div class="node claude" data-key="claude">
+          <span class="nt">subprocess · stack run</span>
+          <span class="nn">claude -p</span>
+          <span class="nd"><code>--output-format stream-json</code></span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="node mcp" data-key="mcp">
+          <span class="nt">mcp server</span>
+          <span class="nn">stack-mcp</span>
+          <span class="nd">render_decision · render_compare · render_playground · …</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="node claude" data-key="jsonl-in">
+          <span class="nt">tail · stack attach</span>
+          <span class="nn">~/.claude jsonl</span>
+          <span class="nd">~/.claude/projects/&lt;hash&gt;/&lt;id&gt;.jsonl</span>
+        </div>
+      </div>
+
+      <!-- row 3: wrapper + mapper -->
+      <div class="cell" style="grid-column: 1 / -1;">
+        <div class="node" data-key="wrapper" style="min-width: 320px;">
+          <span class="nt">wrapper · node</span>
+          <span class="nn">stack</span>
+          <span class="nd">parse stream → mapper → emit mutations</span>
+        </div>
+      </div>
+
+      <!-- row 4: outputs -->
+      <div class="cell">
+        <div class="node store" data-key="store">
+          <span class="nt">storage</span>
+          <span class="nn">.stack/sessions/&lt;id&gt;.events.jsonl</span>
+          <span class="nd">append-only · source of truth</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="node" data-key="server">
+          <span class="nt">local server · node</span>
+          <span class="nn">stack server</span>
+          <span class="nd">SSE /events · POST /api/prompt · POST /api/action</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="node browser" data-key="browser">
+          <span class="nt">browser</span>
+          <span class="nn">session.html / project.html</span>
+          <span class="nd">apply mutations · render component stack</span>
+        </div>
+      </div>
+
+      <!-- arrows drawn via JS once positions are known -->
+      <svg id="arch-svg"><defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="pulse-arrow" /></marker>
+        <marker id="ah-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="pulse-arrow accent" /></marker>
+        <marker id="ah-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="pulse-arrow blue" /></marker>
+        <marker id="ah-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="pulse-arrow green" /></marker>
+        <marker id="ah-p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="pulse-arrow purple" /></marker>
+      </defs></svg>
+    </div>
+  </div>
+
+  <p style="margin-top: 14px;">
+    Two ingest modes share the same downstream. <b>stack run</b> spawns
+    <code>claude -p --output-format stream-json</code> and parses its
+    stdout. <b>stack attach</b> doesn't spawn anything — it tails the
+    JSONL Claude Code writes for any interactive session, so you can run
+    <code>claude</code> normally in a terminal and the browser is just an
+    enriched view. Below that line, everything is identical.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="event-flow"><span class="num">2</span><b>Following one event end to end</b></h2>
+  <p>
+    Click a step to see the data at that point. This is what happens when
+    the model decides to read a file.
+  </p>
+
+  <div class="diagram">
+    <div class="caption">Event lifecycle · model emits tool_use(Read)</div>
+    <div class="flow-row" id="event-row">
+      <div class="step" data-step="0">
+        <span class="lbl">step 1</span>
+        <span class="name">model emits</span>
+        <span class="body"><code>tool_use(Read)</code></span>
+      </div>
+      <div class="step" data-step="1">
+        <span class="lbl">step 2</span>
+        <span class="name">claude stdout</span>
+        <span class="body">stream-json line</span>
+      </div>
+      <div class="step" data-step="2">
+        <span class="lbl">step 3</span>
+        <span class="name">wrapper parses</span>
+        <span class="body">decode JSON event</span>
+      </div>
+      <div class="step" data-step="3">
+        <span class="lbl">step 4</span>
+        <span class="name">mapper resolves</span>
+        <span class="body">→ <code>file-viewer</code></span>
+      </div>
+      <div class="step" data-step="4">
+        <span class="lbl">step 5</span>
+        <span class="name">emit mutation</span>
+        <span class="body">append to log + SSE</span>
+      </div>
+      <div class="step" data-step="5">
+        <span class="lbl">step 6</span>
+        <span class="name">browser appends</span>
+        <span class="body">new component</span>
+      </div>
+      <div class="step" data-step="6">
+        <span class="lbl">step 7</span>
+        <span class="name">tool_result</span>
+        <span class="body">patch the same id</span>
+      </div>
+    </div>
+
+    <div id="event-detail" style="margin-top: 10px;">
+      <div class="event-sample" id="event-payload"></div>
+      <p id="event-explain" style="color: var(--fg-dim); font-size: 13px; margin-top: 8px;"></p>
+    </div>
+  </div>
+
+  <p>
+    Two key invariants. <b>Stable ids.</b> Every mutation carries an
+    <code>id</code> derived from the model's <code>tool_use_id</code>, so
+    the <code>tool_result</code> that arrives later patches the same
+    component — no flicker, no re-mount. <b>Idempotent log.</b> The
+    browser state is exactly <i>the fold over the mutation log</i>. Reload
+    the page and we replay the log; nothing else is needed.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="mapping"><span class="num">3</span><b>How tool calls become components</b></h2>
+  <p>
+    The mapper has two layers. The first is a fixed table for built-in
+    Claude Code tools. The second is the <code>render_*</code> MCP server,
+    which lets the model ask for bespoke components by calling tools.
+  </p>
+
+  <h3>Layer 1 · heuristic mapping table</h3>
+  <div class="mapping">
+    <table>
+      <thead>
+        <tr><th>tool call</th><th></th><th>component</th><th>lifecycle</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>TodoWrite</code></td><td class="arrow">→</td><td><span class="kind plan">plan</span></td><td>mutate in place on subsequent calls; stable id per session</td></tr>
+        <tr><td><code>Edit</code> · <code>Write</code></td><td class="arrow">→</td><td><span class="kind diff">diff</span></td><td>before/after; revert affordance</td></tr>
+        <tr><td><code>Read</code></td><td class="arrow">→</td><td><span class="kind code">file-viewer</span></td><td>inline with line range</td></tr>
+        <tr><td><code>Bash</code></td><td class="arrow">→</td><td><span class="kind term">terminal</span></td><td>streaming; lines append as they arrive</td></tr>
+        <tr><td><code>Glob</code> · <code>Grep</code></td><td class="arrow">→</td><td><span class="kind search">search</span></td><td>list of file:line + highlighted snippet</td></tr>
+        <tr><td><code>WebFetch</code> · <code>WebSearch</code></td><td class="arrow">→</td><td><span class="kind web">web-result</span></td><td>title · summary · link</td></tr>
+        <tr><td><code>Task</code> (subagent)</td><td class="arrow">→</td><td><span class="kind">subagent</span></td><td>collapsible; contains a nested stack — recursive renderer</td></tr>
+        <tr><td>any MCP tool</td><td class="arrow">→</td><td><span class="kind">tool</span></td><td>generic fallback: tool name, params, collapsible result</td></tr>
+        <tr><td>assistant <code>text</code> block</td><td class="arrow">→</td><td><span class="kind">note</span> or <span class="kind code">code</span></td><td>code if mostly a fenced block, else a small note</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="mcp">Layer 2 · the <code>render_*</code> MCP server</h3>
+  <p>
+    The interesting components in the mockup — decision cards, comparison
+    tables, design explorations, theme playgrounds, schema diagrams — aren't
+    standard tool calls. So we ship an MCP server, <b>stack-mcp</b>, that
+    exposes <code>render_*</code> tools. When the model wants one of these,
+    it calls the matching tool; the wrapper sees the tool_use, decodes the
+    payload against a known schema, and renders the component. The model
+    effectively has "speak in components" as part of its toolbox.
+  </p>
+
+  <div class="legend">
+    <div class="item"><div class="ic">📋</div><div><div class="nm">render_plan</div><div class="ds">items[]</div></div></div>
+    <div class="item"><div class="ic">⚖</div><div><div class="nm">render_compare</div><div class="ds">columns[], rows[]</div></div></div>
+    <div class="item"><div class="ic">🎨</div><div><div class="nm">render_designs</div><div class="ds">designs[]</div></div></div>
+    <div class="item"><div class="ic">?</div><div><div class="nm">render_decision</div><div class="ds">question, options[]</div></div></div>
+    <div class="item"><div class="ic">🎚</div><div><div class="nm">render_playground</div><div class="ds">kind, params{}</div></div></div>
+    <div class="item"><div class="ic">📊</div><div><div class="nm">render_stats</div><div class="ds">stats[] (with sparkline)</div></div></div>
+    <div class="item"><div class="ic">🗂</div><div><div class="nm">render_schema</div><div class="ds">entities[], relations[]</div></div></div>
+    <div class="item"><div class="ic">⟨/⟩</div><div><div class="nm">render_code</div><div class="ds">filename, lang, code</div></div></div>
+    <div class="item"><div class="ic">🚀</div><div><div class="nm">render_deploy</div><div class="ds">steps[]</div></div></div>
+    <div class="item" style="border-color: var(--red);"><div class="ic">⚠</div><div><div class="nm">render_html</div><div class="ds">escape hatch · sandboxed iframe</div></div></div>
+  </div>
+
+  <div class="callout">
+    <b>Why this works.</b> The model already knows how to call tools. Adding
+    <code>render_*</code> to its toolbox means we don't need a new IO
+    channel, a new output format, or a new fine-tune. The same model that
+    runs <code>Bash</code> can call <code>render_decision</code>.
+  </div>
+
+  <h3>Sequence of one bespoke render</h3>
+  <div class="diagram">
+    <div class="caption">render_decision · sequence</div>
+    <div class="seq-grid">
+      <div class="head" style="background: #2a1f12; color: #e8c997; border: 1px solid #4a3a26; border-radius: 7px; padding: 6px 10px; text-align: center; font-weight: 600; font-size: 11.5px;">model</div>
+      <div class="head" style="background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 7px; padding: 6px 10px; text-align: center; font-weight: 600; font-size: 11.5px;">stack-mcp</div>
+      <div class="head" style="background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 7px; padding: 6px 10px; text-align: center; font-weight: 600; font-size: 11.5px;">wrapper</div>
+      <div class="head" style="background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 7px; padding: 6px 10px; text-align: center; font-weight: 600; font-size: 11.5px;">log + SSE</div>
+      <div class="head" style="background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 7px; padding: 6px 10px; text-align: center; font-weight: 600; font-size: 11.5px;">browser</div>
+
+      <div class="seq-msg" style="grid-column: 1 / 3;">tool_use(render_decision, …)</div>
+      <div style="grid-column: 3 / 6;"></div>
+
+      <div></div>
+      <div class="seq-msg" style="grid-column: 2 / 4;">ack { id: "dec-7" }</div>
+      <div style="grid-column: 4 / 6;"></div>
+
+      <div></div><div></div>
+      <div class="seq-msg" style="grid-column: 3 / 5;">map → {op: append, type: decision, props}</div>
+      <div></div>
+
+      <div></div><div></div><div></div>
+      <div class="seq-msg" style="grid-column: 4 / 6;">SSE event arrives</div>
+
+      <div></div><div></div>
+      <div class="seq-msg" style="grid-column: 5 / 6; background: var(--accent-soft); color: var(--accent); border-color: #4a3024;">renders decision card</div>
+      <div></div><div></div>
+
+      <div class="seq-msg" style="grid-column: 1 / 6;">…model continues; later, browser POSTs user's pick back via /api/action…</div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="actions"><span class="num">4</span><b>User actions go back the other way</b></h2>
+  <p>
+    Components are interactive. When the user picks a decision option,
+    drags a slider, clicks "copy as prompt", or right-clicks "ask about
+    this", the page POSTs to the server. The server either synthesizes a
+    follow-up user message (and re-runs claude with <code>--resume &lt;id&gt;
+    -p "&lt;text&gt;"</code>) or, when running in <b>attach</b> mode, writes
+    a message into the live session.
+  </p>
+
+  <div class="diagram">
+    <div class="caption">Round-trip · user picks an option on a decision component</div>
+    <div class="flow-row">
+      <div class="step">
+        <span class="lbl">1</span>
+        <span class="name">user click</span>
+        <span class="body">opt 2 on <code>@dec-7</code></span>
+      </div>
+      <div class="step">
+        <span class="lbl">2</span>
+        <span class="name">browser POST</span>
+        <span class="body"><code>/api/action</code></span>
+      </div>
+      <div class="step">
+        <span class="lbl">3</span>
+        <span class="name">server synthesizes</span>
+        <span class="body">"user picked option 2 (manual freeze) for @dec-7"</span>
+      </div>
+      <div class="step">
+        <span class="lbl">4</span>
+        <span class="name">re-run</span>
+        <span class="body"><code>claude --resume &lt;id&gt; -p "…"</code></span>
+      </div>
+      <div class="step">
+        <span class="lbl">5</span>
+        <span class="name">new events</span>
+        <span class="body">flow through normal path</span>
+      </div>
+      <div class="step">
+        <span class="lbl">6</span>
+        <span class="name">decision patched</span>
+        <span class="body">existing card marks "picked"</span>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    The key bit in step 3: the synthesized user message <i>references the
+    component by id</i> (<code>@dec-7</code>). The model already saw that
+    component in its history (it produced it), so it has the context to
+    react. This is how <b>old components stay live</b> across turns —
+    nothing about them is read-only because the conversation can always
+    re-touch them by id.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="storage"><span class="num">5</span><b>How HTML actually gets produced</b></h2>
+  <p>
+    There is no template engine and no React. The page state is exactly
+    <b>the fold over a mutation log</b>. Each mutation either appends a
+    component, patches one by id, or streams more content into one. The
+    browser keeps a <code>Map&lt;id, &#123; type, props, dom &#125;&gt;</code>
+    and applies mutations as they arrive.
+  </p>
+
+  <h3>The four mutation ops</h3>
+  <pre>
+<span class="com">// 1. Append a new component to the stack</span>
+<span class="kw">{</span> op: <span class="str">"append"</span>, parent: <span class="str">"stream"</span>, component: <span class="kw">{</span> id: <span class="str">"plan-3"</span>, type: <span class="str">"plan"</span>, props: <span class="kw">{</span>…<span class="kw">}</span> <span class="kw">}</span> <span class="kw">}</span>
+
+<span class="com">// 2. Patch a component's props (used when tool_result arrives)</span>
+<span class="kw">{</span> op: <span class="str">"patch"</span>,  id: <span class="str">"plan-3"</span>, props: <span class="kw">{</span> items: [...] <span class="kw">}</span> <span class="kw">}</span>
+
+<span class="com">// 3. Stream content into a component (Bash output, etc.)</span>
+<span class="kw">{</span> op: <span class="str">"stream"</span>, id: <span class="str">"term-7"</span>, append: <span class="str">"line of output\n"</span> <span class="kw">}</span>
+
+<span class="com">// 4. Mark a component as done (terminal exit code, test pass/fail count)</span>
+<span class="kw">{</span> op: <span class="str">"finalize"</span>, id: <span class="str">"term-7"</span>, meta: <span class="kw">{</span> exit: <span class="num">0</span> <span class="kw">}</span> <span class="kw">}</span>
+  </pre>
+
+  <h3>How a component is born — the producing process</h3>
+  <ol style="color: var(--fg-dim); line-height: 1.7; max-width: 760px;">
+    <li>An agent event comes in (<code>tool_use</code>, <code>tool_result</code>, or <code>text</code> block).</li>
+    <li>The mapper looks up the handler for that event (built-in table or <code>render_*</code> schema).</li>
+    <li>Handler returns one or more typed mutations (<code>append</code>, <code>patch</code>, <code>stream</code>).</li>
+    <li>Each mutation is written to <code>.stack/sessions/&lt;id&gt;.events.jsonl</code> <i>and</i> pushed to all browser tabs subscribed via SSE.</li>
+    <li>In the browser, the <i>component renderer</i> for that <code>type</code> reads <code>props</code> and produces DOM. Same renderer handles initial mount and subsequent patches — the demo's <code>refreshPlan(id)</code> pattern, generalized.</li>
+    <li>On a fresh page load, the server's <code>/events</code> endpoint replays the entire log before going live. The page reaches the same final state no matter when you join.</li>
+  </ol>
+
+  <div class="callout">
+    <b>Why no framework.</b> Components are independent of each other,
+    each owns its own mutation logic, and the renderer-per-type pattern
+    fits ~30 lines of vanilla JS per component. React would add bundle
+    weight and a diffing layer for something that is already a
+    single-direction diff stream.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="project"><span class="num">6</span><b>From sessions to the project page</b></h2>
+  <p>
+    Each session writes a per-session event log. The project page is the
+    aggregate view across all sessions in <code>.stack/sessions/</code>,
+    plus live git/CI state. It is itself a stack of components, generated
+    fresh on each load (it's cheap — these aren't live-mutating).
+  </p>
+
+  <div class="diagram">
+    <div class="caption">Aggregation · session logs → project page</div>
+    <div class="flow-row">
+      <div class="step">
+        <span class="lbl">inputs</span>
+        <span class="name">session logs</span>
+        <span class="body"><code>.stack/sessions/*.events.jsonl</code></span>
+      </div>
+      <div class="step">
+        <span class="lbl">inputs</span>
+        <span class="name">git state</span>
+        <span class="body">branches · uncommitted · diff vs main</span>
+      </div>
+      <div class="step">
+        <span class="lbl">inputs</span>
+        <span class="name">gh / CI</span>
+        <span class="body">PRs · workflow runs · review comments</span>
+      </div>
+      <div class="step">
+        <span class="lbl">build</span>
+        <span class="name">aggregator</span>
+        <span class="body">scans, summarizes, ranks</span>
+      </div>
+      <div class="step">
+        <span class="lbl">render</span>
+        <span class="name">project.html</span>
+        <span class="body">component stack</span>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    What the aggregator scans for in each session log:
+  </p>
+  <ul style="color: var(--fg-dim); line-height: 1.7;">
+    <li><b>Decisions</b> resolved or open — every <code>decision</code> component with its picked answer.</li>
+    <li><b>Files touched</b> — collected from <code>diff</code> components.</li>
+    <li><b>Test status</b> — last <code>tests</code> finalize event.</li>
+    <li><b>Outcome</b> — was the session abandoned, completed, or did it ship?</li>
+    <li><b>Title + summary</b> — the agent's last <code>note</code>, or a one-line synthesis.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 id="files"><span class="num">7</span><b>Where everything lives on disk</b></h2>
+
+  <div class="filemap">
+<b>~/.claude/projects/&lt;dir-hash&gt;/</b>          <span class="c">— Claude Code's own session JSONL (read in attach mode)</span>
+  &lt;session-uuid&gt;.jsonl
+
+<b>&lt;project-cwd&gt;/.stack/</b>
+  project.json                       <span class="c">— { name, root, created, claude_dir_hash }</span>
+  <b>sessions/</b>
+    &lt;uuid&gt;.events.jsonl              <span class="c">— append-only mutation log (source of truth)</span>
+    &lt;uuid&gt;.snapshot.html             <span class="c">— self-contained shareable snapshot</span>
+  index.json                         <span class="c">— list of sessions w/ summaries (for project page)</span>
+  mcp.json                           <span class="c">— stack-mcp registration</span>
+
+<b>&lt;install&gt;/</b>
+  stack                              <span class="c">— the wrapper CLI binary</span>
+  stack-mcp                          <span class="c">— the MCP server</span>
+  page/                              <span class="c">— session.html + project.html assets</span>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2><span class="num">8</span><b>Dependency map · who needs whom</b></h2>
+  <div class="mapping">
+    <table>
+      <thead><tr><th>component</th><th>depends on</th><th>used by</th></tr></thead>
+      <tbody>
+        <tr><td><code>stack</code> (wrapper)</td><td><code>claude</code> CLI · Node runtime</td><td>everyone — entry point</td></tr>
+        <tr><td>mapper</td><td>stream-json schema · mapping table · MCP schemas</td><td>wrapper</td></tr>
+        <tr><td><code>stack-mcp</code></td><td>MCP SDK (TS or Python)</td><td>Claude Code (registered via <code>mcp.json</code>)</td></tr>
+        <tr><td>stack server</td><td>session event log · git/gh binaries</td><td>browser</td></tr>
+        <tr><td>session.html</td><td>SSE <code>/events</code> · component renderers</td><td>the user's eyes</td></tr>
+        <tr><td>project.html</td><td><code>index.json</code> · live git/CI state</td><td>the user's eyes</td></tr>
+        <tr><td>event log</td><td>filesystem (append-only writes)</td><td>browser replay · project aggregator · sharing</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2><span class="num">9</span><b>What ships in what order</b></h2>
+  <div class="flow-row" style="grid-template-columns: repeat(6, 1fr); gap: 14px;">
+    <div class="step">
+      <span class="lbl">phase 0</span>
+      <span class="name">mapper spike</span>
+      <span class="body">stream-json → print "would render"</span>
+    </div>
+    <div class="step">
+      <span class="lbl">phase 1</span>
+      <span class="name">MVP end-to-end</span>
+      <span class="body">live page · built-in tool mapping</span>
+    </div>
+    <div class="step">
+      <span class="lbl">phase 2</span>
+      <span class="name">render_* MCP</span>
+      <span class="body">bespoke components</span>
+    </div>
+    <div class="step">
+      <span class="lbl">phase 3</span>
+      <span class="name">project page</span>
+      <span class="body">aggregation across sessions</span>
+    </div>
+    <div class="step">
+      <span class="lbl">phase 4</span>
+      <span class="name">round-trip</span>
+      <span class="body">component actions → re-prompt</span>
+    </div>
+    <div class="step">
+      <span class="lbl">phase 5</span>
+      <span class="name">ship</span>
+      <span class="body">single binary · snapshot export</span>
+    </div>
+  </div>
+
+  <p style="margin-top: 22px; color: var(--fg-mute); font-size: 12px; text-align: center;">
+    The whole system in one line:
+    <code style="background: transparent; border: 0; color: var(--accent); font-size: 13px;">
+      events in → mutations out → browser folds them into a stack
+    </code>
+  </p>
+</div>
+
+<script>
+/* ============== big-picture arrows ============== */
+(function () {
+  const archEl = document.getElementById("arch");
+  const svgEl  = document.getElementById("arch-svg");
+
+  // edges: from-key, to-key, color, label, curve
+  const edges = [
+    ["user",    "claude",   "accent", "prompts",            -10],
+    ["user",    "jsonl-in", "accent", "or interactive CLI",  10],
+    ["claude",  "wrapper",  "",       "stream-json",          0],
+    ["mcp",     "wrapper",  "blue",   "render_* calls",       0],
+    ["jsonl-in","wrapper",  "",       "tail jsonl",           0],
+    ["wrapper", "store",    "green",  "append",               0],
+    ["wrapper", "server",   "",       "mutations",            0],
+    ["store",   "server",   "green",  "replay on connect",    0],
+    ["server",  "browser",  "purple", "SSE /events",          0],
+    ["browser", "server",   "accent", "POST /api/action",    15],
+    ["server",  "claude",   "accent", "--resume -p",         15],
+  ];
+
+  function pos(key) {
+    const node = archEl.querySelector(`[data-key="${key}"]`);
+    if (!node) return null;
+    const ar = archEl.getBoundingClientRect();
+    const r  = node.getBoundingClientRect();
+    return {
+      cx: r.left - ar.left + r.width / 2,
+      cy: r.top  - ar.top  + r.height / 2,
+      l:  r.left - ar.left,
+      r:  r.left - ar.left + r.width,
+      t:  r.top  - ar.top,
+      b:  r.top  - ar.top  + r.height,
+      w:  r.width,
+      h:  r.height,
+    };
+  }
+
+  function draw() {
+    svgEl.innerHTML = svgEl.querySelector("defs").outerHTML;
+    edges.forEach(([from, to, color, label, curveBias]) => {
+      const a = pos(from), b = pos(to);
+      if (!a || !b) return;
+      // pick anchor points: edges meet vertically if rows differ
+      const ax = a.cx, bx = b.cx;
+      const ay = a.cy < b.cy ? a.b : a.t;
+      const by = a.cy < b.cy ? b.t : b.b;
+      const mx = (ax + bx) / 2;
+      const my = (ay + by) / 2;
+
+      // curved path
+      const cy1 = ay + (my - ay) * 0.6 + curveBias;
+      const cx1 = ax;
+      const cy2 = by - (by - my) * 0.6 - curveBias;
+      const cx2 = bx;
+      const d = `M ${ax} ${ay} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${bx} ${by - 4}`;
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d);
+      path.setAttribute("class", "pulse-line " + (color || ""));
+      const markerSuf = color === "accent" ? "-a" : color === "blue" ? "-b" : color === "green" ? "-g" : color === "purple" ? "-p" : "";
+      path.setAttribute("marker-end", `url(#ah${markerSuf})`);
+      svgEl.appendChild(path);
+
+      if (label) {
+        const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        t.setAttribute("class", "arrow-label");
+        t.setAttribute("x", mx + 6);
+        t.setAttribute("y", my - 2);
+        t.textContent = label;
+        svgEl.appendChild(t);
+      }
+    });
+  }
+
+  // hover highlight
+  archEl.querySelectorAll(".node").forEach(n => {
+    n.addEventListener("mouseenter", () => {
+      const key = n.dataset.key;
+      svgEl.querySelectorAll("path").forEach(p => p.style.opacity = "0.18");
+      // we don't know which paths are related without lookups; instead just dim all and re-stroke neighbours
+      // for simplicity: dim, then re-emphasize on leave
+    });
+    n.addEventListener("mouseleave", () => {
+      svgEl.querySelectorAll("path").forEach(p => p.style.opacity = "1");
+    });
+  });
+
+  requestAnimationFrame(() => requestAnimationFrame(draw));
+  window.addEventListener("resize", () => requestAnimationFrame(draw));
+})();
+
+/* ============== event flow walkthrough ============== */
+(function () {
+  const samples = [
+    {
+      label: "what the model emits",
+      payload: `<span class="c">// inside the assistant message content blocks:</span>
+{
+  <span class="k">"type"</span>: <span class="v">"tool_use"</span>,
+  <span class="k">"id"</span>: <span class="v">"toolu_01ABC"</span>,
+  <span class="k">"name"</span>: <span class="v">"Read"</span>,
+  <span class="k">"input"</span>: { <span class="k">"file_path"</span>: <span class="v">"src/payments/charge.ts"</span>, <span class="k">"limit"</span>: <span class="v">40</span> }
+}`,
+      explain: "The model decides to read a file. This block is part of an `assistant` message in the API response.",
+    },
+    {
+      label: "as a stream-json line on claude's stdout",
+      payload: `<span class="c">// one line of \`claude -p --output-format stream-json\` stdout</span>
+{ <span class="k">"type"</span>: <span class="v">"stream_event"</span>,
+  <span class="k">"event"</span>: { <span class="k">"type"</span>: <span class="v">"content_block_start"</span>,
+    <span class="k">"content_block"</span>: { <span class="k">"type"</span>: <span class="v">"tool_use"</span>, <span class="k">"name"</span>: <span class="v">"Read"</span>, … } } }`,
+      explain: "Claude Code wraps the same content in a streaming envelope. The wrapper reads stdin one JSON line at a time.",
+    },
+    {
+      label: "the wrapper's decoded view",
+      payload: `<span class="c">// after parsing</span>
+{
+  kind:  <span class="v">"tool_use"</span>,
+  tool:  <span class="v">"Read"</span>,
+  id:    <span class="v">"toolu_01ABC"</span>,
+  input: { file_path: <span class="v">"src/payments/charge.ts"</span>, limit: <span class="v">40</span> }
+}`,
+      explain: "The wrapper normalizes to a flat shape so the mapper doesn't have to care about the stream envelope.",
+    },
+    {
+      label: "mapper resolves the component",
+      payload: `<span class="c">// in mapper.js</span>
+case <span class="v">"Read"</span>: return {
+  type:  <span class="v">"file-viewer"</span>,
+  id:    <span class="v">"fv-toolu_01ABC"</span>,    <span class="c">// derived from tool_use_id</span>
+  props: {
+    path:  ev.input.file_path,
+    lines: <span class="v">"loading…"</span>,        <span class="c">// will be patched by tool_result</span>
+  },
+};`,
+      explain: "The mapper has one handler per tool. Component id is derived from the tool_use_id so the result can find it later.",
+    },
+    {
+      label: "emit one mutation · two places",
+      payload: `<span class="c">// 1. appended to .stack/sessions/&lt;id&gt;.events.jsonl</span>
+{ <span class="k">"op"</span>: <span class="v">"append"</span>, <span class="k">"parent"</span>: <span class="v">"stream"</span>,
+  <span class="k">"component"</span>: { <span class="k">"id"</span>: <span class="v">"fv-toolu_01ABC"</span>, <span class="k">"type"</span>: <span class="v">"file-viewer"</span>, <span class="k">"props"</span>: { … } } }
+
+<span class="c">// 2. pushed via SSE to every connected browser tab</span>
+event: mutation
+data:  {"op":"append","parent":"stream","component":{…}}`,
+      explain: "Single mutation, two destinations. The log is the source of truth; the SSE push is the live update. Either alone is enough to reach the same final state.",
+    },
+    {
+      label: "browser appends a component",
+      payload: `<span class="c">// in page.js</span>
+es.addEventListener(<span class="v">"mutation"</span>, msg =&gt; {
+  const m = JSON.parse(msg.data);
+  if (m.op === <span class="v">"append"</span>) {
+    const dom = renderers[m.component.type](m.component);
+    blocks.set(m.component.id, { dom, props: m.component.props });
+    stream.append(dom);
+  }
+});`,
+      explain: "The browser's job is tiny: take mutations, look up the renderer for the type, run it, and stash the result in a Map by id.",
+    },
+    {
+      label: "tool_result patches the same component",
+      payload: `<span class="c">// later, tool_result comes back</span>
+{ <span class="k">"op"</span>: <span class="v">"patch"</span>,
+  <span class="k">"id"</span>: <span class="v">"fv-toolu_01ABC"</span>,
+  <span class="k">"props"</span>: { <span class="k">"lines"</span>: <span class="v">"…file contents…"</span>, <span class="k">"loaded"</span>: <span class="v">true</span> } }
+
+<span class="c">// browser looks up the existing block and re-renders its props</span>
+const b = blocks.get(m.id);
+Object.assign(b.props, m.props);
+renderers[b.type].update(b.dom, b.props);`,
+      explain: "The result arrives with the same id; the existing component updates in place. No re-mount, no flicker.",
+    },
+  ];
+
+  const row = document.getElementById("event-row");
+  const payload = document.getElementById("event-payload");
+  const explain = document.getElementById("event-explain");
+
+  function show(i) {
+    row.querySelectorAll(".step").forEach((s, idx) => s.classList.toggle("highlight", idx === i));
+    payload.innerHTML = `<div style="color: var(--fg-mute); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;">${samples[i].label}</div>` + samples[i].payload;
+    explain.textContent = samples[i].explain;
+  }
+
+  row.querySelectorAll(".step").forEach((s, i) => s.addEventListener("click", () => show(i)));
+  show(0);
+})();
+</script>
+
+</body>
+</html>

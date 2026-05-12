@@ -19,6 +19,13 @@ stacked into a single page that grows as the session goes.
   Channels). Covers the wrapper, the mapping from tool calls to components,
   the local server, persistence, and a phased roll-out.
 
+- **[`architecture.html`](./architecture.html)** — visual explainer for the
+  system. Draws all the flows (forward, bespoke render_*, user-action
+  round-trip, project aggregation), the mapping table, the four mutation
+  ops, the file layout, and a click-through walkthrough of one event from
+  the model emitting `tool_use(Read)` all the way to a component in the
+  browser.
+
 - **[`demo.html`](./demo.html)** — interactive mockup of the idea. Open it
   in a browser. A simulated agent run plays out as a stack of components:
   a clickable plan, a file diff, a streaming terminal, a live test panel,
