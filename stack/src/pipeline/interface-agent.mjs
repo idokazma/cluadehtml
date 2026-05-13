@@ -707,7 +707,7 @@ export async function editorialAgentLLM(chunk, state, opts = {}) {
   const userPayload = {
     user_prompt: state._lastUserPrompt || "",
     context: {
-      recent_activity: (state._recentActivity || []).slice(-5),
+      recent_activity: (state.recent || []).slice(-5),
       open_components: [...(state._openComponents || [])],
     },
     events: chunk.map(serializeEvent),
