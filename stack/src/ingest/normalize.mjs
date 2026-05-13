@@ -19,7 +19,9 @@ export function normalize(raw) {
 
   // User messages (typed prompts + tool_result bundles).
   if (raw.type === "user") {
-    const content = raw.message?.content || [];
+    let content = raw.message?.content ?? [];
+    // On-disk JSONL stores plain user prompts as strings; wrap to unify shape.
+    if (typeof content === "string") content = [{ type: "text", text: content }];
     const out = [];
     for (const block of content) {
       if (typeof block === "string") {
@@ -41,7 +43,8 @@ export function normalize(raw) {
 
   // Assistant messages — fan content blocks out as separate events.
   if (raw.type === "assistant") {
-    const content = raw.message?.content || [];
+    let content = raw.message?.content ?? [];
+    if (typeof content === "string") content = [{ type: "text", text: content }];
     const out = [];
     for (const block of content) {
       if (block?.type === "text") {

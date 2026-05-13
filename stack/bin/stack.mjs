@@ -5,7 +5,8 @@
 // Usage:
 //   stack run "<prompt>"                  ← spawn `claude -p ...`
 //   stack run --replay <file.jsonl>       ← replay a stream-json fixture
-//   stack run --replay <file> --port 4000
+//   stack run --tail [<file.jsonl>]       ← attach to an existing session on disk
+//   stack run --tail --port 4000          ← --tail with no path auto-discovers
 //
 // The browser opens to http://localhost:3737/ by default.
 
@@ -14,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { runReplay } from "../src/ingest/replay.mjs";
 import { runClaude } from "../src/ingest/claude.mjs";
+import { runTail, autoDiscoverSession } from "../src/ingest/tail.mjs";
 import { prefilter } from "../src/pipeline/prefilter.mjs";
 import { editorialAgentRules } from "../src/pipeline/interface-agent.mjs";
 import { startServer } from "../src/server/index.mjs";
@@ -31,7 +33,7 @@ if (args[0] !== "run" || args.length < 2) {
 const opts = parseOpts(args.slice(1));
 main(opts).catch(e => { console.error(e); process.exit(1); });
 
-async function main({ prompt, replayFile, port }) {
+async function main({ prompt, replayFile, tailFile, tailAuto, port }) {
   const sessionId = randomUUID();
   const sessionDir = path.resolve(process.cwd(), ".stack", "sessions");
   const log = new SessionLog(sessionDir, sessionId);
@@ -78,10 +80,15 @@ async function main({ prompt, replayFile, port }) {
   }
 
   function followUp(text) {
-    // In replay mode, we have nowhere to send it — show it on the page
-    // as a synthetic user prompt and emit a stub assistant note so the
-    // bidirectional loop is visible end-to-end.
-    if (replayFile) {
+    // In replay / tail modes, we have nowhere to send it — show it on the
+    // page as a synthetic user prompt and emit a stub assistant note so
+    // the bidirectional loop is visible end-to-end. Tail mode could one
+    // day drive the user's session via `claude --resume <sessionId>`; for
+    // now it's strictly observational.
+    if (replayFile || tailFile || tailAuto) {
+      const modeNote = replayFile
+        ? "(replay mode — would send to `claude --resume ...`)"
+        : "(tail mode — observing only; not wired to drive the live session)";
       emit({
         op: "append",
         component: { id: `user-${Date.now()}`, type: "prompt", props: { text } },
@@ -89,7 +96,7 @@ async function main({ prompt, replayFile, port }) {
       });
       setTimeout(() => emit({
         op: "append",
-        component: { id: `note-${Date.now()}`, type: "note", props: { text: "(replay mode — would send to `claude --resume ...`)" } },
+        component: { id: `note-${Date.now()}`, type: "note", props: { text: modeNote } },
         ts: Date.now(),
       }), 400);
       return;
@@ -137,6 +144,21 @@ async function main({ prompt, replayFile, port }) {
       onEvent: handleEvent,
       onClose: () => { turnInFlight = false; flushPending(); console.log("\n[replay] complete"); },
     });
+  } else if (tailFile || tailAuto) {
+    const resolved = tailFile
+      ? path.resolve(process.cwd(), tailFile)
+      : autoDiscoverSession(process.cwd());
+    console.log(`tail:    ${resolved}\n`);
+    // Tail mode never sees a `result` turn-boundary, so don't gate on it.
+    turnInFlight = false;
+    const tailer = runTail({
+      file: resolved,
+      onEvent: handleEvent,
+      onClose: () => console.log("\n[tail] stopped"),
+    });
+    const stop = () => { tailer.stop(); process.exit(0); };
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
   } else {
     console.log(`prompt:  ${prompt}\n`);
     turnInFlight = true;
@@ -161,6 +183,11 @@ function parseOpts(args) {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--replay") out.replayFile = args[++i];
+    else if (a === "--tail") {
+      const next = args[i + 1];
+      if (next && !next.startsWith("--")) { out.tailFile = next; i++; }
+      else out.tailAuto = true;
+    }
     else if (a === "--port") out.port = parseInt(args[++i], 10);
     else if (!a.startsWith("--")) out.prompt = a;
   }
