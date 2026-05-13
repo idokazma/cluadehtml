@@ -666,11 +666,15 @@ function synthDiffFromEdit(input, tool) {
 }
 
 // ----------------------------------------------------------------------------
-// LLM-backed implementation (stub). Drop-in replacement: read the system
-// prompt from prompts/interface-agent.md, ask the model to emit JSON,
-// validate against the schema, return mutations.
+// LLM-backed implementation. Drop-in replacement for editorialAgentRules.
+// Reads the system prompt from prompts/interface-agent.md, asks Claude to
+// emit JSON, parses, and returns mutations in the shape the rest of the
+// pipeline expects.
 
 const PROMPT_PATH = path.resolve(__dirname, "../../prompts/interface-agent.md");
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+
 let cachedPrompt = null;
 function loadPrompt() {
   if (cachedPrompt) return cachedPrompt;
@@ -679,32 +683,123 @@ function loadPrompt() {
 }
 
 /**
+ * Call Haiku with the interface-agent prompt. Falls back to rules if there's
+ * no API key, no prompt on disk, or the call fails. The system prompt is
+ * tagged with cache_control: ephemeral so subsequent calls within ~5 min hit
+ * the prompt cache and pay only for the (tiny) per-turn input.
+ *
  * @param {import("../types.mjs").AgentEvent[]} chunk
- * @param {object} state
+ * @param {object} state                shared pipeline state
+ * @param {object} [opts]
+ * @param {Function} [opts.fetch]       injectable for tests
+ * @param {string} [opts.apiKey]        override env var
+ * @param {string} [opts.model]
  * @returns {Promise<Array<import("../types.mjs").Mutation>>}
  */
-export async function editorialAgentLLM(chunk, state) {
+export async function editorialAgentLLM(chunk, state, opts = {}) {
   const system = loadPrompt();
-  if (!system || !process.env.ANTHROPIC_API_KEY) {
-    // No model available — fall back to rules.
+  const apiKey = opts.apiKey || process.env.ANTHROPIC_API_KEY;
+  if (!system || !apiKey) return editorialAgentRules(chunk, state);
+
+  const fetcher = opts.fetch || globalThis.fetch;
+  if (typeof fetcher !== "function") return editorialAgentRules(chunk, state);
+
+  const userPayload = {
+    user_prompt: state._lastUserPrompt || "",
+    context: {
+      recent_activity: (state._recentActivity || []).slice(-5),
+      open_components: [...(state._openComponents || [])],
+    },
+    events: chunk.map(serializeEvent),
+  };
+
+  try {
+    const res = await fetcher(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: opts.model || DEFAULT_MODEL,
+        max_tokens: 2048,
+        system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: JSON.stringify(userPayload) }],
+      }),
+    });
+    if (!res.ok) {
+      const body = await safeText(res);
+      throw new Error(`anthropic ${res.status}: ${body.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    const text = data?.content?.[0]?.text || "";
+    const parsed = extractJson(text);
+    if (!parsed) throw new Error("could not parse JSON from model output");
+    return toMutations(parsed, chunk, state);
+  } catch (e) {
+    console.error("[editorial-llm] falling back to rules:", e.message);
     return editorialAgentRules(chunk, state);
   }
-  // To keep this implementation honest while remaining runnable
-  // without network access, we just call the rules path. A real
-  // call would look like:
-  //
-  //   const r = await fetch("https://api.anthropic.com/v1/messages", {
-  //     method: "POST",
-  //     headers: { ... },
-  //     body: JSON.stringify({
-  //       model: "claude-haiku-4-5-20251001",
-  //       system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-  //       messages: [{ role: "user", content: JSON.stringify(chunk) }],
-  //       max_tokens: 2048,
-  //     }),
-  //   });
-  //   const data = await r.json();
-  //   const parsed = JSON.parse(data.content[0].text);
-  //   return parsed.mutations;
-  return editorialAgentRules(chunk, state);
+}
+
+function serializeEvent(ev) {
+  if (ev.kind === "assistant" && ev.tool) {
+    return { kind: "assistant", tool: ev.tool, input: ev.input, tool_use_id: ev.tool_use_id };
+  }
+  if (ev.kind === "assistant") return { kind: "assistant", text: ev.text };
+  if (ev.kind === "user") return { kind: "user", text: ev.text };
+  if (ev.kind === "tool_result") {
+    const c = typeof ev.content === "string" ? ev.content : JSON.stringify(ev.content);
+    return { kind: "tool_result", tool_use_id: ev.tool_use_id, content: c.slice(0, 4000) };
+  }
+  return { kind: ev.kind };
+}
+
+function extractJson(text) {
+  if (!text) return null;
+  // The prompt asks for JSON only, but some models wrap in fences. Be forgiving.
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const body = (fence ? fence[1] : text).trim();
+  try { return JSON.parse(body); } catch {}
+  // Last-resort: find the outermost {...}.
+  const first = body.indexOf("{");
+  const last = body.lastIndexOf("}");
+  if (first >= 0 && last > first) {
+    try { return JSON.parse(body.slice(first, last + 1)); } catch {}
+  }
+  return null;
+}
+
+function toMutations(parsed, chunk, state) {
+  const ts = chunk[chunk.length - 1]?.ts || Date.now();
+  const out = [];
+  if (parsed.activity) {
+    out.push({ op: "activity", ...parsed.activity, ts });
+  }
+  for (const c of parsed.commits || []) {
+    if (c.op === "append" && c.component) {
+      const comp = { ...c.component };
+      if (!comp.id) comp.id = newId(abbrev(comp.type));
+      out.push({ op: "append", component: comp, ts });
+      // Track ids so subsequent patches from the LLM can target them by id.
+      state._openComponents ??= new Set();
+      state._openComponents.add(comp.id);
+    } else if (c.op === "patch" && c.id) {
+      out.push({ op: "patch", id: c.id, props: c.props || {}, ts });
+    }
+  }
+  return out;
+}
+
+function abbrev(type) {
+  // Keep ids short and memorable. Maps the prompt's vocabulary to short prefixes.
+  const m = { milestone: "ms", decision: "dec", schema: "sch", module: "mod",
+              preview: "pv", terminal: "term", tests: "tst", deploy: "dep",
+              stats: "stat", summary: "sum", compare: "cmp", designs: "des" };
+  return m[type] || (type || "c").slice(0, 4);
+}
+
+async function safeText(res) {
+  try { return await res.text(); } catch { return ""; }
 }
