@@ -55,6 +55,7 @@ async function main(opts) {
 
   const server = startServer({
     port,
+    sessionsDir: sessionDir,
     replay: () => log.readAll(),
     getState: () => components,
     onAction: (action) => {

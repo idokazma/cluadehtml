@@ -1,7 +1,9 @@
 // Local HTTP + SSE server for one stack session.
 //
 // Routes:
-//   GET  /                  the page shell
+//   GET  /                  the page shell (current session)
+//   GET  /project           project rollup across all sessions for this cwd
+//   GET  /api/sessions      JSON: list of session summaries
 //   GET  /static/*          page assets
 //   GET  /events            SSE stream of mutations
 //   POST /api/action        bidirectional input: component action
@@ -12,6 +14,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { listSessions } from "../store/sessions.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PAGE_DIR = path.resolve(__dirname, "../../page");
@@ -32,7 +35,7 @@ const MIME = {
  * @param {(text: string) => void} opts.onPrompt
  * @param {() => Map<string, import("../types.mjs").Component>} opts.getState
  */
-export function startServer({ replay, onAction, onPrompt, getState, port = 3737 }) {
+export function startServer({ replay, onAction, onPrompt, getState, sessionsDir, port = 3737 }) {
   const subscribers = new Set();
 
   const server = http.createServer((req, res) => {
@@ -40,6 +43,14 @@ export function startServer({ replay, onAction, onPrompt, getState, port = 3737 
 
     if (req.method === "GET" && url.pathname === "/") {
       return serveFile(res, path.join(PAGE_DIR, "session.html"));
+    }
+    if (req.method === "GET" && url.pathname === "/project") {
+      return serveFile(res, path.join(PAGE_DIR, "project.html"));
+    }
+    if (req.method === "GET" && url.pathname === "/api/sessions") {
+      const sessions = sessionsDir ? listSessions(sessionsDir) : [];
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      return res.end(JSON.stringify({ sessions }));
     }
     if (req.method === "GET" && url.pathname.startsWith("/static/")) {
       const file = path.join(PAGE_DIR, url.pathname.slice("/static/".length));
