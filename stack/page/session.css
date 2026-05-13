@@ -41,6 +41,13 @@ header {
   background: var(--bg-3); color: var(--fg-dim); border: 1px solid var(--line); }
 .pill.link { text-decoration: none; }
 .pill.link:hover { color: var(--fg); border-color: var(--fg-dim); }
+
+/* Static archived-artifact mode — hide everything interactive. */
+body.static-mode .input-bar,
+body.static-mode .activity,
+body.static-mode .activity-drawer,
+body.static-mode .ctx-menu { display: none !important; }
+body.static-mode #main { padding-bottom: 4rem; }
 .pill.live { color: var(--green); border-color: #2c4a36; background: #16241c; }
 .pill.live::before {
   content: ""; display: inline-block; width: 6px; height: 6px;

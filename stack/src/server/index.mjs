@@ -8,6 +8,7 @@
 //   GET  /events            SSE stream of mutations
 //   POST /api/action        bidirectional input: component action
 //   POST /api/prompt        free-form follow-up prompt
+//   POST /api/session-end   freeze the session and save a static artifact
 //   GET  /api/state         current state (components Map, for debugging)
 
 import http from "node:http";
@@ -35,7 +36,7 @@ const MIME = {
  * @param {(text: string) => void} opts.onPrompt
  * @param {() => Map<string, import("../types.mjs").Component>} opts.getState
  */
-export function startServer({ replay, onAction, onPrompt, getState, sessionsDir, port = 3737 }) {
+export function startServer({ replay, onAction, onPrompt, onSessionEnd, getState, sessionsDir, port = 3737 }) {
   const subscribers = new Set();
 
   const server = http.createServer((req, res) => {
@@ -71,6 +72,18 @@ export function startServer({ replay, onAction, onPrompt, getState, sessionsDir,
         try { onPrompt(body.text || ""); res.writeHead(200, { "content-type": "application/json" }); res.end('{"ok":true}'); }
         catch (e) { fail(res, e); }
       }).catch(e => fail(res, e));
+    }
+    if (req.method === "POST" && url.pathname === "/api/session-end") {
+      if (!onSessionEnd) { res.writeHead(501); return res.end("session-end not wired"); }
+      return readJSON(req)
+        .catch(() => ({}))
+        .then(async (body) => {
+          try {
+            const result = await onSessionEnd(body || {});
+            res.writeHead(200, { "content-type": "application/json" });
+            res.end(JSON.stringify({ ok: true, ...result }));
+          } catch (e) { fail(res, e); }
+        });
     }
     if (req.method === "GET" && url.pathname === "/api/state") {
       const state = getState();

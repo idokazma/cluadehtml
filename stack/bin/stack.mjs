@@ -20,7 +20,9 @@ import { prefilter } from "../src/pipeline/prefilter.mjs";
 import { editorialAgentRules, editorialAgentLLM } from "../src/pipeline/interface-agent.mjs";
 import { startServer } from "../src/server/index.mjs";
 import { SessionLog } from "../src/store/log.mjs";
+import { buildArtifact } from "../src/store/artifact.mjs";
 import { synthesizeUserMessage } from "../src/server/synthesize.mjs";
+import fs from "node:fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -53,11 +55,51 @@ async function main(opts) {
   const pendingActions = [];
   const pendingPrompts = [];
 
+  let sessionFinalized = false;
+
+  async function finalizeSession({ summary, title } = {}) {
+    if (sessionFinalized) {
+      return { alreadyFinalized: true, artifact: artifactPath() };
+    }
+    // Drain any pending editorial work so the artifact reflects everything.
+    flushTurn();
+    await editorialChain;
+    // Emit a closing milestone so the page (and the artifact) show a clear end.
+    const ms = {
+      op: "append",
+      component: {
+        id: `ms-end-${Date.now()}`,
+        type: "milestone",
+        props: {
+          icon: "🏁",
+          kind: "session-end",
+          title: title || "Session complete",
+          subtitle: summary || `${components.size} components`,
+        },
+      },
+      ts: Date.now(),
+    };
+    emit(ms);
+    // Write the static artifact.
+    const html = buildArtifact({ sessionId, events: log.readAll(), title: title || "stack — archived session" });
+    const out = artifactPath();
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, html);
+    sessionFinalized = true;
+    console.log(`\n[stack] artifact -> ${out}`);
+    return { artifact: out, components: components.size };
+  }
+
+  function artifactPath() {
+    return path.resolve(process.cwd(), ".stack", "artifacts", `${sessionId}.html`);
+  }
+
   const server = startServer({
     port,
     sessionsDir: sessionDir,
     replay: () => log.readAll(),
     getState: () => components,
+    onSessionEnd: (body) => finalizeSession(body || {}),
     onAction: (action) => {
       action.ts = Date.now();
       if (turnInFlight) { pendingActions.push(action); console.log("[action] queued"); }

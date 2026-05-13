@@ -697,17 +697,26 @@ function openCtx(ev) {
 }
 document.addEventListener("click", () => ctxMenu.hidden = true);
 
-// ---- SSE ----
+// ---- SSE (skipped in static-artifact mode) ----
 const conn = $("#connection");
-const es = new EventSource("/events");
-es.addEventListener("open", () => conn.textContent = "live");
-es.addEventListener("mutation", (e) => {
-  try { apply(JSON.parse(e.data)); }
-  catch (err) { console.error("bad mutation", err, e.data); }
-});
-es.addEventListener("replay-start", () => conn.textContent = "replaying…");
-es.addEventListener("replay-end",   () => conn.textContent = "live");
-es.addEventListener("error", () => conn.textContent = "disconnected");
+if (window.__STATIC_EVENTS__) {
+  // Archived session — render the embedded events once, no live connection.
+  document.body.classList.add("static-mode");
+  for (const m of window.__STATIC_EVENTS__) {
+    try { apply(m); } catch (err) { console.error("static apply", err); }
+  }
+  if (conn) conn.textContent = "archived";
+} else {
+  const es = new EventSource("/events");
+  es.addEventListener("open", () => conn.textContent = "live");
+  es.addEventListener("mutation", (e) => {
+    try { apply(JSON.parse(e.data)); }
+    catch (err) { console.error("bad mutation", err, e.data); }
+  });
+  es.addEventListener("replay-start", () => conn.textContent = "replaying…");
+  es.addEventListener("replay-end",   () => conn.textContent = "live");
+  es.addEventListener("error", () => conn.textContent = "disconnected");
+}
 
 // ---- helpers ----
 function escapeHtml(s) {
