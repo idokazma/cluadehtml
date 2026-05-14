@@ -1,17 +1,21 @@
 // Local HTTP + SSE server for one stack session.
 //
 // Routes:
-//   GET  /                  the page shell
+//   GET  /                  the page shell (current session)
+//   GET  /project           project rollup across all sessions for this cwd
+//   GET  /api/sessions      JSON: list of session summaries
 //   GET  /static/*          page assets
 //   GET  /events            SSE stream of mutations
 //   POST /api/action        bidirectional input: component action
 //   POST /api/prompt        free-form follow-up prompt
+//   POST /api/session-end   freeze the session and save a static artifact
 //   GET  /api/state         current state (components Map, for debugging)
 
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { listSessions } from "../store/sessions.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PAGE_DIR = path.resolve(__dirname, "../../page");
@@ -32,7 +36,7 @@ const MIME = {
  * @param {(text: string) => void} opts.onPrompt
  * @param {() => Map<string, import("../types.mjs").Component>} opts.getState
  */
-export function startServer({ replay, onAction, onPrompt, getState, port = 3737 }) {
+export function startServer({ replay, onAction, onPrompt, onSessionEnd, getState, sessionsDir, port = 3737 }) {
   const subscribers = new Set();
 
   const server = http.createServer((req, res) => {
@@ -40,6 +44,14 @@ export function startServer({ replay, onAction, onPrompt, getState, port = 3737 
 
     if (req.method === "GET" && url.pathname === "/") {
       return serveFile(res, path.join(PAGE_DIR, "session.html"));
+    }
+    if (req.method === "GET" && url.pathname === "/project") {
+      return serveFile(res, path.join(PAGE_DIR, "project.html"));
+    }
+    if (req.method === "GET" && url.pathname === "/api/sessions") {
+      const sessions = sessionsDir ? listSessions(sessionsDir) : [];
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      return res.end(JSON.stringify({ sessions }));
     }
     if (req.method === "GET" && url.pathname.startsWith("/static/")) {
       const file = path.join(PAGE_DIR, url.pathname.slice("/static/".length));
@@ -60,6 +72,18 @@ export function startServer({ replay, onAction, onPrompt, getState, port = 3737 
         try { onPrompt(body.text || ""); res.writeHead(200, { "content-type": "application/json" }); res.end('{"ok":true}'); }
         catch (e) { fail(res, e); }
       }).catch(e => fail(res, e));
+    }
+    if (req.method === "POST" && url.pathname === "/api/session-end") {
+      if (!onSessionEnd) { res.writeHead(501); return res.end("session-end not wired"); }
+      return readJSON(req)
+        .catch(() => ({}))
+        .then(async (body) => {
+          try {
+            const result = await onSessionEnd(body || {});
+            res.writeHead(200, { "content-type": "application/json" });
+            res.end(JSON.stringify({ ok: true, ...result }));
+          } catch (e) { fail(res, e); }
+        });
     }
     if (req.method === "GET" && url.pathname === "/api/state") {
       const state = getState();

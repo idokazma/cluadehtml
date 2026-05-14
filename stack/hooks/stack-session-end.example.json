@@ -1,0 +1,16 @@
+{
+  "_comment": "Drop the Stop hook into ~/.claude/settings.json (merge under hooks.Stop). Replace /absolute/path/to with where you cloned stack.",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/absolute/path/to/stack/hooks/notify-stack.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
